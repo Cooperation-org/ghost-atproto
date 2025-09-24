@@ -1,0 +1,21 @@
+{
+  "name": "ghost-bluesky-bridge",
+  "version": "0.1.0",
+  "description": "Bridge to automatically post Ghost blog posts to Bluesky",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "@atproto/api": "^0.6.20",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
