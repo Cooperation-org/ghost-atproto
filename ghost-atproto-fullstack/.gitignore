@@ -1,3 +1,31 @@
 scripts/
 team-docs/
 *.pem
+node_modules/
+.DS_Store
+*.log
+# NextJS
+.next/
+out/
+
+# Build outputs
+dist/
+build/
+
+# Environment variables
+SETUP.md
+*.pem
+.env*
+!.env.example
+*.pem
+*.key
+.env
+.env.local
+.env.production
+# Database
+database.sqlite
+*.db
+
+# SSH keys
+id_rsa*
+ghostsky.pem
