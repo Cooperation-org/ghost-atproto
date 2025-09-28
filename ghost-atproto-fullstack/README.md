@@ -65,15 +65,17 @@ In Ghost Admin → Integrations → Add custom integration:
 ## Development
 
 ```bash
-cd ~/Desktop/ghost-atproto/ghost-atproto-fullstack/frontend
-yarn  dev
+# Backend setup
+cd backend
+npm install
+cp .env.example .env  # Configure database connection
+npx prisma generate
+npm run dev
 
-
-cd ~/Desktop/ghost-atproto/ghost-atproto-fullstack/backend 
-yarn  dev
-
-ssh -i "ghostsky.pem" -L 3306:localhost:3306 ubuntu@ec2-204-236-176-29.us-west-1.compute.amazonaws.com
-```
+# Frontend setup  
+cd ../frontend
+yarn install
+yarn dev
 
 
 ## Security Notes
@@ -83,6 +85,3 @@ ssh -i "ghostsky.pem" -L 3306:localhost:3306 ubuntu@ec2-204-236-176-29.us-west-1
 - Rotate webhook secrets regularly
 - Store OAuth sessions in a database for production
 
-## License
-
-MIT
