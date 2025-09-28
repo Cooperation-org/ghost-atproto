@@ -65,8 +65,16 @@ In Ghost Admin → Integrations → Add custom integration:
 ## Development
 
 ```bash
-npm run dev
+cd ~/Desktop/ghost-atproto/ghost-atproto-fullstack/frontend
+yarn  dev
+
+
+cd ~/Desktop/ghost-atproto/ghost-atproto-fullstack/backend 
+yarn  dev
+
+ssh -i "ghostsky.pem" -L 3306:localhost:3306 ubuntu@ec2-204-236-176-29.us-west-1.compute.amazonaws.com
 ```
+
 
 ## Security Notes
 
