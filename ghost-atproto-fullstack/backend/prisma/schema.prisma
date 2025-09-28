@@ -1,0 +1,99 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // ATProto/Bluesky credentials
+  atprotoHandle    String?
+  atprotoPassword  String?
+  atprotoDid       String?
+  
+  // Ghost integration
+  ghostApiKey      String?
+  ghostUrl         String?
+  
+  // Relations
+  posts            Post[]
+  syncLogs         SyncLog[]
+  
+  @@map("users")
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   @db.Text
+  slug        String
+  status      String   @default("draft") // draft, published, scheduled
+  
+  // Ghost data
+  ghostId     String?  @unique
+  ghostSlug   String?
+  ghostUrl    String?
+  
+  // ATProto data
+  atprotoUri  String?
+  atprotoCid  String?
+  
+  // Metadata
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("posts")
+}
+
+model SyncLog {
+  id          String   @id @default(cuid())
+  action      String   // "publish", "update", "delete"
+  status      String   // "success", "error", "pending"
+  source      String   // "ghost", "atproto"
+  target      String   // "ghost", "atproto"
+  
+  // References
+  postId      String?
+  ghostId     String?
+  atprotoUri  String?
+  
+  // Error handling
+  error       String?  @db.Text
+  retryCount  Int      @default(0)
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("sync_logs")
+}
+
+model Settings {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("settings")
+}
