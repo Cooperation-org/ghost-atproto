@@ -1,37 +1,62 @@
+"use client"
+
+import { Container, Typography, Grid, Paper, List, ListItem, ListItemText, Stack } from '@mui/material'
+import CircleIcon from '@mui/icons-material/Circle'
+
 export default function Home() {
   return (
-    <main className="container mx-auto px-4 py-8">
-      <h1 className="text-4xl font-bold mb-6">Ghost ATProto Integration</h1>
-      <p className="text-lg mb-4">
+    <Container maxWidth="lg" sx={{ py: 8 }}>
+      <Typography variant="h3" component="h1" gutterBottom>
+        Ghost ATProto Integration
+      </Typography>
+      <Typography variant="body1" sx={{ mb: 4 }}>
         Welcome to your Ghost-ATProto NextJS application!
-      </p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-        <div className="border rounded-lg p-6">
-          <h2 className="text-2xl font-semibold mb-3">Features</h2>
-          <ul className="list-disc pl-6 space-y-2">
-            <li>Ghost CMS Integration</li>
-            <li>ATProto/Bluesky Publishing</li>
-            <li>Automatic Content Sync</li>
-            <li>User Management</li>
-            <li>Real-time Dashboard</li>
-          </ul>
-        </div>
-        
-        <div className="border rounded-lg p-6">
-          <h2 className="text-2xl font-semibold mb-3">Status</h2>
-          <div className="space-y-2">
-            <div className="flex items-center">
-              <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
-              Database Connected
-            </div>
-            <div className="flex items-center">
-              <span className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></span>
-              Setup In Progress
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
+      </Typography>
+
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Paper variant="outlined" sx={{ p: 3 }}>
+            <Typography variant="h5" component="h2" gutterBottom>
+              Features
+            </Typography>
+            <List dense>
+              <ListItem>
+                <ListItemText primary="Ghost CMS Integration" />
+              </ListItem>
+              <ListItem>
+                <ListItemText primary="ATProto/Bluesky Publishing" />
+              </ListItem>
+              <ListItem>
+                <ListItemText primary="Automatic Content Sync" />
+              </ListItem>
+              <ListItem>
+                <ListItemText primary="User Management" />
+              </ListItem>
+              <ListItem>
+                <ListItemText primary="Real-time Dashboard" />
+              </ListItem>
+            </List>
+          </Paper>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Paper variant="outlined" sx={{ p: 3 }}>
+            <Typography variant="h5" component="h2" gutterBottom>
+              Status
+            </Typography>
+            <Stack spacing={1}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <CircleIcon fontSize="small" sx={{ color: 'success.main' }} />
+                <Typography variant="body2">Database Connected</Typography>
+              </Stack>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <CircleIcon fontSize="small" sx={{ color: 'warning.main' }} />
+                <Typography variant="body2">Setup In Progress</Typography>
+              </Stack>
+            </Stack>
+          </Paper>
+        </Grid>
+      </Grid>
+    </Container>
   )
 }
