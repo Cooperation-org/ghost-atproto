@@ -29,3 +29,4 @@ database.sqlite
 # SSH keys
 id_rsa*
 ghostsky.pem
+.next/
