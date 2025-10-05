@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import atprotoRoutes from './routes/atproto';
 
 // Load environment variables
 dotenv.config();
@@ -168,6 +169,8 @@ app.post(
 app.use(express.json());
 
 // Routes
+app.use('/api/atproto', atprotoRoutes);
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Ghost ATProto Backend is running!' });
 });
