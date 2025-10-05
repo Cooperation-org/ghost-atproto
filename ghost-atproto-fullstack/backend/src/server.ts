@@ -9,6 +9,7 @@ import path from 'path';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
+import atprotoRoutes from './routes/atproto';
 
 // Load environment variables
 dotenv.config();
@@ -283,7 +284,11 @@ app.post(
 // Generic JSON body parser
 app.use(express.json());
 
-// Health check
+
+// Routes
+app.use('/api/atproto', atprotoRoutes);
+
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Ghost ATProto Backend is running!' });
 });
