@@ -1,87 +1,217 @@
 # Ghost to AT Protocol Integration
 
-A Ghost CMS custom integration that automatically publishes posts to AT Protocol networks (like Bluesky) using proper OAuth authentication.
+A multi-tenant Ghost CMS integration that automatically publishes posts to AT Protocol networks (Bluesky) using a hybrid authentication approach (OAuth + App Passwords).
 
 ## Features
 
-- OAuth-based authentication (no passwords stored)
-- Ghost custom integration with webhooks
-- Converts Ghost posts to AT Protocol format
-- Secure webhook signature verification
+- **Multi-tenant**: Each Ghost admin can connect their own Ghost blog and Bluesky account
+- **Hybrid Authentication**: Supports both OAuth (preferred) and App Passwords (fallback)
+- **Any Ghost Server**: Works with any Ghost installation via Admin API
+- **Automatic Posting**: Posts to Bluesky when Ghost posts are published
+- **Webhook Integration**: Secure signature verification
+- **Separate Database**: Independent MySQL database for tracking users and posts
 
-## Setup
+## Quick Start
 
-### 1. Generate OAuth Keys
+### Prerequisites
 
-```bash
-npm install
-npm run setup
-```
+- Node.js 18+
+- MySQL 5.7+ or 8.0+
+- A Ghost blog (local or remote)
+- A Bluesky account
 
-This generates an ES256 key pair and updates `oauth-client-metadata.json`.
+### Installation
 
-### 2. Host Client Metadata
+1. **Clone and navigate to backend**
+   ```bash
+   cd backend
+   ```
 
-Host `oauth-client-metadata.json` at a public HTTPS URL. This URL becomes your `client_id`.
+2. **Install dependencies and set up database**
+   ```bash
+   npm install
+   export MYSQL_PWD=your_mysql_root_password
+   make setup
+   ```
 
-### 3. Configure Environment
+   This will:
+   - Create `ghost_atproto` database
+   - Create `ghost_atproto` MySQL user with random password
+   - Push database schema
+   - Generate Prisma client
 
-Copy `.env.example` to `.env` and update:
-- `OAUTH_CLIENT_ID`: Your metadata URL
-- `OAUTH_REDIRECT_URI`: Your callback URL
-- `OAUTH_PRIVATE_KEY`: Private key from setup
-- `GHOST_WEBHOOK_SECRET`: Random secret for webhooks
-- `BASE_URL`: Your integration's base URL
+3. **Update .env with the database password**
 
-### 4. Deploy the Integration
+   The setup will output a `DATABASE_URL` - copy it to your `.env` file.
 
-```bash
-npm start
-```
+4. **Start the backend server**
+   ```bash
+   make dev
+   ```
 
-### 5. Authorize an Account
+   Server runs on `http://localhost:5000`
 
-1. Visit: `https://your-domain.com/oauth/authorize?handle=user.bsky.social`
-2. Complete OAuth flow
-3. Save the session ID
+### Configuration
 
-### 6. Configure Ghost
+Each Ghost admin needs to:
 
-In Ghost Admin → Integrations → Add custom integration:
-- Name: AT Protocol Publisher
-- Add webhook:
-  - Event: Post published
-  - URL: `https://your-domain.com/webhooks/ghost/published`
-  - Secret: Your `GHOST_WEBHOOK_SECRET`
-  - Add custom header: `X-ATProto-Session-ID: [your-session-id]`
+1. **Create a user account** in the system (via API or frontend)
+2. **Add their Ghost credentials**:
+   - Ghost URL (e.g., `https://blog.example.com`)
+   - Ghost Admin API Key
+3. **Add their Bluesky credentials** (one of):
+   - **Option A (Recommended)**: OAuth flow (future implementation)
+   - **Option B (Current)**: App Password from Bluesky settings
 
-## How It Works
+### Connect Ghost Webhook
 
-1. Ghost sends webhook when post is published
-2. Integration verifies webhook signature
-3. Uses OAuth session to authenticate with AT Protocol
-4. Converts and posts content
+In your Ghost Admin panel:
+
+1. Go to **Settings → Integrations → Add custom integration**
+2. Name it "Bluesky Publisher"
+3. Add a webhook:
+   - **Event**: `Post published`
+   - **URL**: `http://your-domain.com/api/ghost/webhook`
+   - **Add custom header**: `X-User-ID: your-user-id-here`
+
+## API Endpoints
+
+### User Management
+- `GET /api/users` - List all users
+- `POST /api/users` - Create new user
+- `GET /api/users/:id` - Get user details
+- `PUT /api/users/:id` - Update user settings
+
+### Posts & Sync
+- `GET /api/posts` - View synced posts
+- `GET /api/sync-logs` - View sync history
+- `POST /api/ghost/webhook` - Ghost webhook endpoint
+
+### Health
+- `GET /api/health` - Health check
 
 ## Development
 
-```bash
-# Backend setup
-cd backend
-npm install
-cp .env.example .env  # Configure database connection
-npx prisma generate
-npm run dev
+### Backend
 
-# Frontend setup  
-cd ../frontend
+```bash
+cd backend
+make dev          # Start development server
+make db-push      # Push schema changes
+make db-generate  # Regenerate Prisma client
+```
+
+### Frontend (Coming Soon)
+
+```bash
+cd frontend
 yarn install
 yarn dev
+```
 
+## Architecture
+
+```
+┌─────────────┐         Webhook          ┌──────────────────┐
+│   Ghost     │ ────────────────────────> │  Backend (Port   │
+│   (Any URL) │                           │     5000)        │
+└─────────────┘                           └──────────────────┘
+                                                   │
+                                          ┌────────┴────────┐
+                                          │                 │
+                                    ┌─────▼─────┐    ┌─────▼──────┐
+                                    │  MySQL    │    │  Bluesky   │
+                                    │ (ghost_   │    │  API       │
+                                    │  atproto) │    │            │
+                                    └───────────┘    └────────────┘
+```
+
+## Deployment with Nginx
+
+### Nginx Configuration
+
+Create `/etc/nginx/sites-available/ghost-atproto`:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Enable and reload:
+```bash
+sudo ln -s /etc/nginx/sites-available/ghost-atproto /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### SSL with Let's Encrypt
+
+```bash
+sudo certbot --nginx -d your-domain.com
+```
+
+## Environment Variables
+
+```bash
+# Server
+PORT=5000
+BASE_URL=https://your-domain.com
+FRONTEND_URL=http://localhost:3000
+
+# Database
+DATABASE_URL="mysql://ghost_atproto:password@localhost:3306/ghost_atproto"
+
+# Security
+GHOST_WEBHOOK_SECRET=random-secret-here
+
+# OAuth (for future OAuth flow)
+OAUTH_CLIENT_ID=https://your-domain.com/client-metadata.json
+OAUTH_REDIRECT_URI=https://your-domain.com/api/oauth/callback
+
+# AT Protocol
+ATPROTO_SERVICE=https://bsky.social
+```
 
 ## Security Notes
 
-- Never commit `.env` or private keys
-- Use HTTPS for all endpoints
-- Rotate webhook secrets regularly
-- Store OAuth sessions in a database for production
+- Never commit `.env` files
+- Use strong passwords for MySQL users
+- Enable Ghost webhook signature verification in production
+- Use HTTPS in production (required for OAuth)
+- Rotate secrets regularly
+- App passwords should be stored securely (encrypted at rest in production)
+
+## Troubleshooting
+
+### Database connection issues
+- Verify MySQL credentials in `.env`
+- Check MySQL user permissions: `GRANT ALL PRIVILEGES ON ghost_atproto.* TO 'ghost_atproto'@'localhost';`
+
+### Webhook not receiving posts
+- Verify Ghost webhook URL is correct
+- Check `X-User-ID` header is set
+- Review sync logs: `GET /api/sync-logs`
+
+### Bluesky posting fails
+- Verify Bluesky handle and app password
+- Check app password is active in Bluesky settings
+- Review error in sync logs
+
+## License
+
+MIT
 

@@ -1,0 +1,19 @@
+[Unit]
+Description=Ghost to Bluesky Bridge Service
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=civicsky
+WorkingDirectory=/home/civicsky/ghost-atproto/ghost-atproto-fullstack/backend
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ghost-bridge
+
+[Install]
+WantedBy=multi-user.target
