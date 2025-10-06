@@ -17,20 +17,46 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // ATProto/Bluesky credentials
-  atprotoHandle   String?
-  atprotoPassword String?
-  atprotoDid      String?
+  // ATProto/Bluesky credentials (hybrid approach)
+  atprotoHandle      String? // Bluesky handle (e.g., user.bsky.social)
+  atprotoAppPassword String? // App password (fallback auth method)
+  atprotoDid         String? // Decentralized identifier
 
-  // Ghost integration
-  ghostApiKey String?
-  ghostUrl    String?
+  // Ghost integration (supports any Ghost server)
+  ghostApiKey    String? // Ghost Admin API key
+  ghostUrl       String? // Full Ghost server URL (e.g., https://blog.example.com)
+  ghostWebhookId String? // Ghost webhook ID for this integration
 
   // Relations
-  posts    Post[]
-  syncLogs SyncLog[]
+  posts         Post[]
+  syncLogs      SyncLog[]
+  oauthSessions OAuthSession[]
 
   @@map("users")
+}
+
+model OAuthSession {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // OAuth tokens
+  accessToken  String   @db.Text
+  refreshToken String   @db.Text
+  tokenType    String   @default("DPoP")
+
+  // DPoP key (for token binding)
+  dpopKeyJwk   String   @db.Text // JSON Web Key for DPoP
+
+  // Session metadata
+  sub          String   // Subject (DID)
+  scope        String?  // Granted scopes
+  expiresAt    DateTime
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("oauth_sessions")
 }
 
 model Post {

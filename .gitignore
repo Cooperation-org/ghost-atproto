@@ -1,7 +1,12 @@
+# Node.js
 node_modules/
-.DS_Store
-*.log
-# NextJS
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+yarn.lock*
+# Next.js build outputs
 .next/
 out/
 
@@ -14,4 +19,29 @@ build/
 .env.local
 .env.production
 
-.next/
+# Operating System files
+.DS_Store
+
+# Yarn lock file (if you use npm instead)
+yarn.lock
+
+# Package manager files
+package-lock.json # (If you're using npm, include this, otherwise ignore it if using yarn/pnpm)
+pnpm-lock.yaml # (For pnpm, include this instead of package-lock.json)
+
+# IDE / Editor files
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.swp
+
+# Coverage output
+coverage/
+
+# OS generated files
+Thumbs.db
