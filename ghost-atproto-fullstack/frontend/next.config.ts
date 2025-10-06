@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  basePath: '/bridge',
-  assetPrefix: '/bridge',
+  // Removed basePath and assetPrefix to serve from root
 };
 
 export default nextConfig;

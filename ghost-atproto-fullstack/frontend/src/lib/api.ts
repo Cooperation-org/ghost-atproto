@@ -1,6 +1,6 @@
 import { User, Post, SyncLog, LoginResponse, ApiError } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 class ApiClient {
   private token: string | null = null;
@@ -16,10 +16,14 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
     };
+
+    // Add any existing headers
+    if (options.headers) {
+      Object.assign(headers, options.headers);
+    }
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
