@@ -111,14 +111,28 @@ async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
   return null;
 }
 
-// Helper: Post to Bluesky with clickable links
-async function postToBluesky(agent: BskyAgent, text: string, url?: string) {
-  const postText = url ? `${text}\n\nRead more: ${url}` : text;
-  const maxLength = 300;
-  const truncated = postText.length > maxLength ? postText.slice(0, maxLength - 3) + '...' : postText;
+// Helper: Post to Bluesky with clickable links and better content formatting
+async function postToBluesky(agent: BskyAgent, title: string, content?: string, url?: string) {
+  // Strip HTML tags and get clean text from content
+  const cleanContent = content 
+    ? content.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+    : '';
+  
+  // Create a better formatted post with maximum content
+  // Bluesky limit is 300 chars, so we maximize the content
+  const urlText = url ? `\n\n🔗 ${url}` : '';
+  const titleText = `${title}\n\n`;
+  const maxContentLength = 300 - titleText.length - urlText.length;
+  
+  let contentToPost = cleanContent;
+  if (contentToPost.length > maxContentLength) {
+    contentToPost = contentToPost.substring(0, maxContentLength - 3) + '...';
+  }
+  
+  const postText = `${titleText}${contentToPost}${urlText}`;
 
   // Use RichText to detect and create link facets
-  const rt = new RichText({ text: truncated });
+  const rt = new RichText({ text: postText });
   await rt.detectFacets(agent);
 
   return await agent.post({
@@ -177,7 +191,8 @@ async function syncGhostToBluesky(
         limit,
         filter: 'status:published',
         order: 'published_at DESC',
-        fields: 'id,title,slug,excerpt,custom_excerpt,html,plaintext,feature_image,url,published_at'
+        fields: 'id,title,slug,excerpt,custom_excerpt,html,plaintext,mobiledoc,lexical,feature_image,url,published_at',
+        formats: 'html,plaintext,mobiledoc'  // Explicitly request all content formats
       }
     });
 
@@ -211,7 +226,25 @@ async function syncGhostToBluesky(
       // Create Bluesky post only if it doesn't already exist on Bluesky
       const excerpt = post.excerpt || post.custom_excerpt || '';
       const fullContent = post.html || post.plaintext || '';
-      const blueskyText = `${post.title}\n\n${excerpt.substring(0, 200)}${excerpt.length > 200 ? '...' : ''}\n\nRead more: ${post.url}`;
+      
+      // Log content status for debugging
+      console.log(`📝 Processing "${post.title}": Content length = ${fullContent.length} chars`);
+      
+      // Strip HTML tags and get clean text
+      const cleanText = fullContent.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+      
+      // Create a better formatted post with more content
+      // Bluesky limit is 300 chars, so we maximize the content
+      const urlText = `\n\n🔗 ${post.url}`;
+      const titleText = `${post.title}\n\n`;
+      const maxContentLength = 300 - titleText.length - urlText.length;
+      
+      let contentToPost = excerpt || cleanText;
+      if (contentToPost.length > maxContentLength) {
+        contentToPost = contentToPost.substring(0, maxContentLength - 3) + '...';
+      }
+      
+      const blueskyText = `${titleText}${contentToPost}${urlText}`;
 
       try {
         let blueskyResult;
@@ -424,7 +457,9 @@ app.post(
               const agent = await getAgentForUser(userId);
               if (agent) {
                 try {
-                  const result = await postToBluesky(agent, title, ghostUrl || undefined);
+                  // Use excerpt if available, otherwise use content
+                  const contentToSend = excerpt || content;
+                  const result = await postToBluesky(agent, title, contentToSend, ghostUrl || undefined);
 
                   // Update post with ATProto data
                   await prisma.post.update({

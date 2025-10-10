@@ -16,7 +16,6 @@ import {
 } from '@mui/material';
 import ArticleIcon from '@mui/icons-material/Article';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import SyncIcon from '@mui/icons-material/Sync';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
 import { Post } from '@/lib/types';
@@ -24,9 +23,6 @@ import { Post } from '@/lib/types';
 export default function DashboardPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
-  const [syncError, setSyncError] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -43,26 +39,6 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  const handleSyncNow = async () => {
-    setSyncing(true);
-    setSyncMessage('');
-    setSyncError('');
-
-    try {
-      // Sync with higher limit (50 posts) and force update
-      const result = await api.syncNow(50, true);
-      setSyncMessage(`✅ ${result.message} - Synced: ${result.syncedCount}, Skipped: ${result.skippedCount}, Total: ${result.totalProcessed}`);
-
-      // Reload posts after sync
-      const updatedPosts = await api.getAllPosts();
-      setPosts(updatedPosts);
-    } catch (err) {
-      setSyncError(err instanceof Error ? err.message : 'Sync failed');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   if (loading) {
     return (
       <DashboardLayout>
@@ -75,37 +51,11 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+      <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
           Articles
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={syncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
-          onClick={handleSyncNow}
-          disabled={syncing}
-          sx={{ 
-            textTransform: 'none',
-            px: 3,
-            py: 1,
-            borderRadius: 2
-          }}
-        >
-          {syncing ? 'Syncing...' : 'Sync Now'}
-        </Button>
       </Box>
-
-      {syncMessage && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSyncMessage('')}>
-          {syncMessage}
-        </Alert>
-      )}
-
-      {syncError && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setSyncError('')}>
-          {syncError}
-        </Alert>
-      )}
 
       {/* Articles Grid */}
       {posts.length === 0 ? (

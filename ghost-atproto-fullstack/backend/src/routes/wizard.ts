@@ -2,6 +2,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { BskyAgent } from '@atproto/api';
 import jwt from 'jsonwebtoken';
+import axios from 'axios';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -228,13 +229,11 @@ router.post('/complete', authenticateToken, async (req, res) => {
     try {
       // We'll trigger sync by making a request to our own sync endpoint
       // This is a fire-and-forget operation
-      const axios = require('axios');
       
       // Get a fresh JWT token for the sync request
-      const jwt = require('jsonwebtoken');
       const token = jwt.sign(
         { userId },
-        process.env.JWT_SECRET || 'your-secret-key',
+        JWT_SECRET,
         { expiresIn: '1h' }
       );
 

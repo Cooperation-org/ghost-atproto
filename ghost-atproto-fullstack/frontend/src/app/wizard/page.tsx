@@ -137,236 +137,272 @@ export default function WizardPage() {
     switch (step) {
       case 0:
         return (
-          <Box>
-            {/* Main Content - Two Column Layout */}
-            <Grid container spacing={4}>
-              {/* LEFT SIDE - Ghost Integration */}
-              <Grid size={{ xs: 12, lg: 7 }}>
-                <Paper sx={{ p: 4, borderRadius: 2, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, color: '#15171A' }}>
-                      Ghost Integration
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Step 1 of 3: Connect Your Ghost Account
-                    </Typography>
-                  </Box>
+          <Box sx={{ maxWidth: 700, mx: 'auto' }}>
+            <Paper 
+              sx={{ 
+                p: 4, 
+                borderRadius: 3, 
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                border: '1px solid',
+                borderColor: 'grey.200',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  boxShadow: '0 6px 30px rgba(0,0,0,0.15)',
+                }
+              }}
+            >
+              {/* Ghost Logo and Header */}
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, gap: 3 }}>
+                <Box sx={{ 
+                  width: 80, 
+                  height: 80, 
+                  bgcolor: '#15171A', 
+                  borderRadius: 2.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 42,
+                  fontWeight: 700,
+                  color: 'white',
+                  boxShadow: '0 4px 16px rgba(21, 23, 26, 0.3)',
+                  transition: 'transform 0.3s ease',
+                  '&:hover': {
+                    transform: 'scale(1.05)'
+                  }
+                }}>
+                  G
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, color: '#15171A', mb: 0.5 }}>
+                    Ghost Integration
+                  </Typography>
+                  <Typography variant="body1" color="text.secondary" sx={{ fontSize: '0.95rem' }}>
+                    Step 1 of 3: Connect Your Ghost Account
+                  </Typography>
+                </Box>
+              </Box>
 
-                  <Grid container spacing={3}>
-                    <Grid size={{ xs: 12 }}>
-                      <TextField
-                        fullWidth
-                        label="Ghost URL"
-                        value={formData.ghostUrl}
-                        onChange={handleChange('ghostUrl')}
-                        placeholder="https://yourblog.com"
-                        disabled={loading}
-                        variant="outlined"
-                        size="medium"
+              <Divider sx={{ mb: 4 }} />
+
+              <Grid container spacing={3}>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    fullWidth
+                    label="Ghost URL"
+                    value={formData.ghostUrl}
+                    onChange={handleChange('ghostUrl')}
+                    placeholder="https://yourblog.com"
+                    disabled={loading}
+                    variant="outlined"
+                    size="medium"
+                    helperText="The URL where your Ghost blog is hosted"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        '&:hover fieldset': {
+                          borderColor: '#15171A',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#15171A',
+                        },
+                      },
+                    }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    fullWidth
+                    label="Ghost Admin API Key"
+                    value={formData.ghostApiKey}
+                    onChange={handleChange('ghostApiKey')}
+                    placeholder="xxxxxxxxxxxxxxxxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    disabled={loading}
+                    type="password"
+                    variant="outlined"
+                    size="medium"
+                    helperText="Found in Ghost Admin → Settings → Integrations"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        '&:hover fieldset': {
+                          borderColor: '#15171A',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#15171A',
+                        },
+                      },
+                    }}
+                  />
+                </Grid>
+                <Grid size={{ xs: 12 }}>
+                  <TextField
+                    fullWidth
+                    label="Ghost Content API Key (Optional)"
+                    value={formData.ghostContentApiKey}
+                    onChange={handleChange('ghostContentApiKey')}
+                    placeholder="Enter your content API key"
+                    disabled={loading}
+                    type="password"
+                    variant="outlined"
+                    size="medium"
+                    helperText="Optional: Used for reading public content"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        '&:hover fieldset': {
+                          borderColor: '#15171A',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#15171A',
+                        },
+                      },
+                    }}
+                  />
+                </Grid>
+              </Grid>
+
+              <Box 
+                sx={{ 
+                  mt: 4, 
+                  p: 3, 
+                  bgcolor: '#f8f9fa', 
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'grey.200'
+                }}
+              >
+                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700, mb: 2.5, color: '#15171A' }}>
+                  📦 Import Options
+                </Typography>
+                <FormGroup>
+                  <Grid container spacing={1.5}>
+                    <Grid size={{ xs: 6 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox 
+                            checked={importOptions.posts} 
+                            onChange={handleImportOptionChange('posts')}
+                            sx={{
+                              color: '#15171A',
+                              '&.Mui-checked': {
+                                color: '#15171A',
+                              },
+                            }}
+                          />
+                        }
+                        label={<Typography variant="body2" sx={{ fontWeight: 500 }}>Posts</Typography>}
                       />
                     </Grid>
-                    <Grid size={{ xs: 12 }}>
-                      <TextField
-                        fullWidth
-                        label="Ghost Admin API Key"
-                        value={formData.ghostApiKey}
-                        onChange={handleChange('ghostApiKey')}
-                        placeholder="Enter your admin API key"
-                        disabled={loading}
-                        type="password"
-                        variant="outlined"
-                        size="medium"
+                    <Grid size={{ xs: 6 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox 
+                            checked={importOptions.authors} 
+                            onChange={handleImportOptionChange('authors')}
+                            sx={{
+                              color: '#15171A',
+                              '&.Mui-checked': {
+                                color: '#15171A',
+                              },
+                            }}
+                          />
+                        }
+                        label={<Typography variant="body2" sx={{ fontWeight: 500 }}>Authors</Typography>}
                       />
                     </Grid>
-                    <Grid size={{ xs: 12 }}>
-                      <TextField
-                        fullWidth
-                        label="Ghost Content API Key"
-                        value={formData.ghostContentApiKey}
-                        onChange={handleChange('ghostContentApiKey')}
-                        placeholder="Enter your content API key"
-                        disabled={loading}
-                        type="password"
-                        variant="outlined"
-                        size="medium"
+                    <Grid size={{ xs: 6 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox 
+                            checked={importOptions.tags} 
+                            onChange={handleImportOptionChange('tags')}
+                            sx={{
+                              color: '#15171A',
+                              '&.Mui-checked': {
+                                color: '#15171A',
+                              },
+                            }}
+                          />
+                        }
+                        label={<Typography variant="body2" sx={{ fontWeight: 500 }}>Tags</Typography>}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 6 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox 
+                            checked={importOptions.newsletters} 
+                            onChange={handleImportOptionChange('newsletters')}
+                            sx={{
+                              color: '#15171A',
+                              '&.Mui-checked': {
+                                color: '#15171A',
+                              },
+                            }}
+                          />
+                        }
+                        label={<Typography variant="body2" sx={{ fontWeight: 500 }}>Newsletters</Typography>}
                       />
                     </Grid>
                   </Grid>
+                </FormGroup>
+              </Box>
 
-                  <Box sx={{ mt: 4 }}>
-                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                      Import Options
-                    </Typography>
-                    <FormGroup>
-                      <Grid container spacing={1}>
-                        <Grid size={{ xs: 6 }}>
-                          <FormControlLabel
-                            control={<Checkbox checked={importOptions.posts} onChange={handleImportOptionChange('posts')} />}
-                            label={<Typography variant="body2">Posts</Typography>}
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 6 }}>
-                          <FormControlLabel
-                            control={<Checkbox checked={importOptions.authors} onChange={handleImportOptionChange('authors')} />}
-                            label={<Typography variant="body2">Authors</Typography>}
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 6 }}>
-                          <FormControlLabel
-                            control={<Checkbox checked={importOptions.tags} onChange={handleImportOptionChange('tags')} />}
-                            label={<Typography variant="body2">Tags</Typography>}
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 6 }}>
-                          <FormControlLabel
-                            control={<Checkbox checked={importOptions.newsletters} onChange={handleImportOptionChange('newsletters')} />}
-                            label={<Typography variant="body2">Newsletters</Typography>}
-                          />
-                        </Grid>
-                      </Grid>
-                    </FormGroup>
-                  </Box>
+              <Button
+                variant="contained"
+                fullWidth
+                size="large"
+                disabled={loading}
+                onClick={handleNext}
+                sx={{ 
+                  mt: 4, 
+                  py: 2, 
+                  bgcolor: '#15171A',
+                  '&:hover': { 
+                    bgcolor: '#2c2e31',
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 6px 20px rgba(0,0,0,0.2)'
+                  },
+                  textTransform: 'none',
+                  fontSize: '1.1rem',
+                  fontWeight: 600,
+                  borderRadius: 2,
+                  transition: 'all 0.3s ease',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                }}
+              >
+                {loading ? (
+                  <>
+                    <CircularProgress size={22} sx={{ mr: 1 }} color="inherit" />
+                    Validating Connection...
+                  </>
+                ) : (
+                  <>
+                    Continue to Bluesky →
+                  </>
+                )}
+              </Button>
 
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    size="large"
-                    disabled={loading}
-                    onClick={handleNext}
-                    sx={{ 
-                      mt: 3, 
-                      py: 1.5, 
-                      bgcolor: '#1976d2',
-                      '&:hover': { bgcolor: '#1565c0' },
-                      textTransform: 'none',
-                      fontSize: '1rem',
-                      fontWeight: 600
-                    }}
-                  >
-                    {loading ? (
-                      <>
-                        <CircularProgress size={20} sx={{ mr: 1 }} color="inherit" />
-                        Validating...
-                      </>
-                    ) : (
-                      'Sync Now'
-                    )}
-                  </Button>
-
-                  {ghostValidation?.valid && (
-                    <Typography variant="caption" color="success.main" sx={{ display: 'block', mt: 2, textAlign: 'center' }}>
-                      Last synced: Just now. Status: <strong>Healthy</strong>
-                    </Typography>
-                  )}
-                </Paper>
-              </Grid>
-
-              {/* RIGHT SIDE - Connection Status */}
-              <Grid size={{ xs: 12, lg: 5 }}>
-                <Paper sx={{ 
-                  p: 5, 
-                  borderRadius: 2, 
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.08)', 
-                  textAlign: 'center',
-                  bgcolor: ghostValidation?.valid ? '#E8F5E9' : '#FFF3E0',
-                  border: '2px solid',
-                  borderColor: ghostValidation?.valid ? '#4caf50' : '#ff9800'
-                }}>
-                  <Box sx={{ 
-                    width: 100, 
-                    height: 100, 
-                    bgcolor: '#15171A', 
+              {ghostValidation?.valid && (
+                <Alert 
+                  severity="success" 
+                  sx={{ 
+                    mt: 3,
                     borderRadius: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 56,
-                    fontWeight: 700,
-                    color: 'white',
-                    mx: 'auto',
-                    mb: 3,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                  }}>
-                    G
-                  </Box>
-
-                  {ghostValidation?.valid ? (
-                    <>
-                      <CheckCircleIcon sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
-                      <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: 'success.dark' }}>
-                        Ghost Connected!
-                      </Typography>
-                      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                        Your Ghost site is successfully connected
-                      </Typography>
-                      <Paper sx={{ p: 2, bgcolor: 'white', mb: 3 }}>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          SITE
-                        </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {ghostValidation.site?.title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {formData.ghostUrl}
-                        </Typography>
-                      </Paper>
-                      <Button
-                        variant="contained"
-                        fullWidth
-                        size="large"
-                        onClick={handleNext}
-                        disabled={loading}
-                        sx={{ 
-                          py: 1.5,
-                          bgcolor: 'success.main',
-                          '&:hover': { bgcolor: 'success.dark' },
-                          textTransform: 'none',
-                          fontSize: '1rem',
-                          fontWeight: 600
-                        }}
-                      >
-                        {loading ? (
-                          <>
-                            <CircularProgress size={20} sx={{ mr: 1 }} color="inherit" />
-                            Processing...
-                          </>
-                        ) : (
-                          'Continue to Bluesky Setup →'
-                        )}
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: '#f57c00' }}>
-                        Ghost Not Connected
-                      </Typography>
-                      <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                        Please fill in your Ghost credentials and click &quot;Sync Now&quot; to connect your site
-                      </Typography>
-                      <Box sx={{ 
-                        p: 3, 
-                        bgcolor: 'white', 
-                        borderRadius: 2,
-                        border: '2px dashed #ff9800',
-                        mb: 3
-                      }}>
-                        <Typography variant="body2" sx={{ mb: 2, fontWeight: 600 }}>
-                          ⚠️ Connection Required
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Enter your Ghost URL and API keys in the form on the left, then click the &quot;Sync Now&quot; button to establish connection.
-                        </Typography>
-                      </Box>
-                      <Alert severity="info" sx={{ textAlign: 'left' }}>
-                        <Typography variant="caption">
-                          <strong>Need help?</strong> Find your API keys in Ghost Admin → Settings → Integrations → Custom Integrations
-                        </Typography>
-                      </Alert>
-                    </>
-                  )}
-                </Paper>
-              </Grid>
-            </Grid>
+                    '& .MuiAlert-icon': {
+                      fontSize: 28
+                    }
+                  }}
+                >
+                  <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    ✓ Successfully Connected to {ghostValidation.site?.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {formData.ghostUrl}
+                  </Typography>
+                </Alert>
+              )}
+            </Paper>
           </Box>
         );
 
@@ -728,7 +764,7 @@ export default function WizardPage() {
         </Container>
       </Box>
 
-      <Container maxWidth="xl" sx={{ py: 4, pb: 12 }}>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
         <Box sx={{ minHeight: 500 }}>
           {error && (
             <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -785,56 +821,6 @@ export default function WizardPage() {
           </Box>
         </Box>
       </Container>
-
-      {/* Footer with Social Media Links */}
-      <Box sx={{ 
-        bgcolor: 'white', 
-        borderTop: '1px solid #e0e0e0', 
-        py: 3, 
-        mt: 6,
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0
-      }}>
-        <Container maxWidth="xl">
-          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3 }}>
-            <TwitterIcon sx={{ color: '#1DA1F2', cursor: 'pointer', '&:hover': { opacity: 0.7 } }} />
-            <Box component="span" sx={{ 
-              width: 24, 
-              height: 24, 
-              bgcolor: '#1877f2', 
-              borderRadius: '50%', 
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: 'pointer',
-              '&:hover': { opacity: 0.7 }
-            }}>
-              f
-            </Box>
-            <Box component="span" sx={{ 
-              width: 24, 
-              height: 24, 
-              background: 'linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)', 
-              borderRadius: '50%', 
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: 'pointer',
-              '&:hover': { opacity: 0.7 }
-            }}>
-              i
-            </Box>
-          </Box>
-        </Container>
-      </Box>
     </Box>
   );
 }

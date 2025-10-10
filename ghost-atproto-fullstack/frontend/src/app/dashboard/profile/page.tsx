@@ -139,8 +139,8 @@ export default function ProfilePage() {
           <Typography variant="body1" color={user?.ghostUrl ? 'success.main' : 'error.main'} sx={{ mt: 1 }}>
             <strong>Ghost Site:</strong> {user?.ghostUrl || 'Not configured'}
           </Typography>
-          <Typography variant="body1" color={user?.atprotoHandle ? 'success.main' : 'error.main'} sx={{ mt: 1 }}>
-            <strong>Bluesky Handle:</strong> {user?.atprotoHandle || 'Not configured'}
+          <Typography variant="body1" color={user?.blueskyHandle ? 'success.main' : 'error.main'} sx={{ mt: 1 }}>
+            <strong>Bluesky Handle:</strong> {user?.blueskyHandle || 'Not configured'}
           </Typography>
         </Box>
       </Paper>
