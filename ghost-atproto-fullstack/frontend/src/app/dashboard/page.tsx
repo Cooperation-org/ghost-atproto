@@ -23,7 +23,6 @@ import { Post, SyncLog, User } from '@/lib/types';
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [logs, setLogs] = useState<SyncLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
@@ -32,14 +31,12 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [userData, postsData, logsData] = await Promise.all([
+        const [userData, postsData] = await Promise.all([
           api.getMe(),
-          api.getPosts(),
-          api.getLogs(),
+          api.getAllPosts(), // Get ALL posts from ALL users
         ]);
         setUser(userData);
         setPosts(postsData);
-        setLogs(logsData);
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
       } finally {
@@ -59,13 +56,9 @@ export default function DashboardPage() {
       const result = await api.syncNow(5);
       setSyncMessage(`✅ ${result.message} - Synced: ${result.syncedCount}, Skipped: ${result.skippedCount}, Total: ${result.totalProcessed}`);
       
-      // Reload data after sync
-      const [updatedPosts, updatedLogs] = await Promise.all([
-        api.getPosts(),
-        api.getLogs(),
-      ]);
+      // Reload posts after sync
+      const updatedPosts = await api.getAllPosts();
       setPosts(updatedPosts);
-      setLogs(updatedLogs);
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Sync failed');
     } finally {
@@ -83,15 +76,17 @@ export default function DashboardPage() {
     );
   }
 
-  const successfulSyncs = logs.filter((log) => log.status === 'success').length;
-  const failedSyncs = logs.filter((log) => log.status === 'error').length;
-
   return (
     <DashboardLayout>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4">
-          Welcome back, {user?.name || user?.email}!
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box>
+          <Typography variant="h4" gutterBottom>
+            All Articles
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Showing all synced articles from all connected authors
+          </Typography>
+        </Box>
         <Button
           variant="contained"
           startIcon={syncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
@@ -114,80 +109,111 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+      {/* Stats Card */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <ArticleIcon color="primary" sx={{ mr: 1 }} />
                 <Typography color="textSecondary" variant="h6">
-                  Total Posts
+                  Total Articles
                 </Typography>
               </Box>
               <Typography variant="h3">{posts.length}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                From all connected authors
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <CheckCircleIcon color="success" sx={{ mr: 1 }} />
                 <Typography color="textSecondary" variant="h6">
-                  Successful Syncs
+                  Synced to Bluesky
                 </Typography>
               </Box>
-              <Typography variant="h3">{successfulSyncs}</Typography>
+              <Typography variant="h3">{posts.filter(p => p.atprotoUri).length}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Successfully published
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <ErrorIcon color="error" sx={{ mr: 1 }} />
+                <ArticleIcon color="info" sx={{ mr: 1 }} />
                 <Typography color="textSecondary" variant="h6">
-                  Failed Syncs
+                  Pending
                 </Typography>
               </Box>
-              <Typography variant="h3">{failedSyncs}</Typography>
+              <Typography variant="h3">{posts.filter(p => !p.atprotoUri).length}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Not yet synced
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Connection Status
-            </Typography>
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" color={user?.ghostUrl ? 'success.main' : 'error.main'}>
-                Ghost: {user?.ghostUrl || 'Not configured'}
-              </Typography>
-              <Typography variant="body2" color={user?.atprotoHandle ? 'success.main' : 'error.main'} sx={{ mt: 1 }}>
-                Bluesky: {user?.atprotoHandle || 'Not configured'}
-              </Typography>
-            </Box>
-          </Paper>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Recent Activity
-            </Typography>
-            {logs.slice(0, 5).map((log) => (
-              <Typography key={log.id} variant="body2" sx={{ mt: 1 }}>
-                {log.action} - {log.status} ({new Date(log.createdAt).toLocaleString()})
-              </Typography>
+      {/* Posts List */}
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Recent Articles
+        </Typography>
+        {posts.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+            No articles yet. Complete the wizard to start syncing posts!
+          </Typography>
+        ) : (
+          <Box sx={{ mt: 2 }}>
+            {posts.slice(0, 20).map((post: any) => (
+              <Card key={post.id} sx={{ mb: 2 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="h6" gutterBottom>
+                        {post.title}
+                      </Typography>
+                      {post.content && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          {post.content.substring(0, 150)}...
+                        </Typography>
+                      )}
+                      <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+                        {post.user && (
+                          <Typography variant="caption" color="text.secondary">
+                            By: {post.user.name || post.user.email}
+                          </Typography>
+                        )}
+                        {post.ghostUrl && (
+                          <Typography variant="caption" color="primary">
+                            <a href={post.ghostUrl} target="_blank" rel="noopener noreferrer">
+                              View on Ghost →
+                            </a>
+                          </Typography>
+                        )}
+                        {post.atprotoUri && (
+                          <Typography variant="caption" color="success.main">
+                            ✓ Synced to Bluesky
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
             ))}
-          </Paper>
-        </Grid>
-      </Grid>
+          </Box>
+        )}
+      </Paper>
     </DashboardLayout>
   );
 }

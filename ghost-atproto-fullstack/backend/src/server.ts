@@ -593,6 +593,53 @@ app.get('/api/auth/logs', authenticateToken, async (req, res) => {
   }
 });
 
+// Get current user's profile stats
+app.get('/api/auth/profile/stats', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    
+    // Get total posts synced
+    const totalPosts = await prisma.post.count({
+      where: { userId, atprotoUri: { not: null } }
+    });
+    
+    // Get successful syncs
+    const successfulSyncs = await prisma.syncLog.count({
+      where: { userId, status: 'success' }
+    });
+    
+    // Get failed syncs
+    const failedSyncs = await prisma.syncLog.count({
+      where: { userId, status: 'error' }
+    });
+    
+    // Get recent posts
+    const recentPosts = await prisma.post.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    });
+    
+    // Get recent logs
+    const recentLogs = await prisma.syncLog.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+    
+    res.json({
+      totalPosts,
+      successfulSyncs,
+      failedSyncs,
+      recentPosts,
+      recentLogs
+    });
+  } catch (error) {
+    console.error('Profile stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch profile stats' });
+  }
+});
+
 // Manual sync endpoint - sync Ghost posts to Bluesky
 app.post('/api/auth/sync', authenticateToken, async (req, res) => {
   try {

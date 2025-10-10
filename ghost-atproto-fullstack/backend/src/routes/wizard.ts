@@ -211,10 +211,60 @@ router.post('/complete', authenticateToken, async (req, res) => {
     // Generate webhook URL for Ghost
     const webhookUrl = `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/ghost/webhook`;
 
+    // Trigger initial sync in the background
+    // Import the sync function from server or create a sync service
+    // For now, we'll make an internal call to the sync endpoint
+    const syncResults = {
+      attempted: false,
+      success: false,
+      syncedCount: 0,
+      error: null as string | null
+    };
+
+    try {
+      // We'll trigger sync by making a request to our own sync endpoint
+      // This is a fire-and-forget operation
+      const axios = require('axios');
+      
+      // Get a fresh JWT token for the sync request
+      const jwt = require('jsonwebtoken');
+      const token = jwt.sign(
+        { userId },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '1h' }
+      );
+
+      // Trigger sync without waiting for it to complete
+      axios.post(
+        `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/sync`,
+        { limit: 5 },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      ).then((syncResponse: any) => {
+        console.log('✅ Initial sync completed:', syncResponse.data);
+        syncResults.attempted = true;
+        syncResults.success = true;
+        syncResults.syncedCount = syncResponse.data.syncedCount || 0;
+      }).catch((syncError: any) => {
+        console.error('⚠️ Initial sync failed:', syncError.message);
+        syncResults.attempted = true;
+        syncResults.error = syncError.message;
+      });
+
+    } catch (error) {
+      console.error('Failed to trigger initial sync:', error);
+    }
+
     return res.json({
       success: true,
       user: updatedUser,
       webhookUrl,
+      message: 'Setup complete! Initial sync has been triggered in the background.',
+      syncTriggered: true,
       nextSteps: {
         webhookInstructions: [
           '1. Go to your Ghost Admin panel',
