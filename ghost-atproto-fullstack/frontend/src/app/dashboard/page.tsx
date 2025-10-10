@@ -9,10 +9,13 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Button,
+  Alert,
 } from '@mui/material';
 import ArticleIcon from '@mui/icons-material/Article';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
+import SyncIcon from '@mui/icons-material/Sync';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
 import { Post, SyncLog, User } from '@/lib/types';
@@ -22,6 +25,9 @@ export default function DashboardPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [logs, setLogs] = useState<SyncLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncError, setSyncError] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -44,6 +50,29 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    setSyncMessage('');
+    setSyncError('');
+
+    try {
+      const result = await api.syncNow(5);
+      setSyncMessage(`✅ ${result.message} - Synced: ${result.syncedCount}, Skipped: ${result.skippedCount}, Total: ${result.totalProcessed}`);
+      
+      // Reload data after sync
+      const [updatedPosts, updatedLogs] = await Promise.all([
+        api.getPosts(),
+        api.getLogs(),
+      ]);
+      setPosts(updatedPosts);
+      setLogs(updatedLogs);
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -59,12 +88,34 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <Typography variant="h4" gutterBottom>
-        Welcome back, {user?.name || user?.email}!
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h4">
+          Welcome back, {user?.name || user?.email}!
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={syncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
+          onClick={handleSyncNow}
+          disabled={syncing}
+        >
+          {syncing ? 'Syncing...' : 'Sync Now'}
+        </Button>
+      </Box>
+
+      {syncMessage && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSyncMessage('')}>
+          {syncMessage}
+        </Alert>
+      )}
+
+      {syncError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSyncError('')}>
+          {syncError}
+        </Alert>
+      )}
 
       <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -78,7 +129,7 @@ export default function DashboardPage() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -92,7 +143,7 @@ export default function DashboardPage() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -108,7 +159,7 @@ export default function DashboardPage() {
       </Grid>
 
       <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               Connection Status
@@ -124,7 +175,7 @@ export default function DashboardPage() {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               Recent Activity

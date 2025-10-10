@@ -12,6 +12,7 @@ import {
   Alert,
 } from '@mui/material';
 import { api } from '@/lib/api';
+import { wizardApi } from '@/lib/wizard-api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,6 +27,19 @@ export default function LoginPage() {
 
     try {
       await api.login(email);
+      
+      // Check if user needs to complete wizard
+      try {
+        const status = await wizardApi.getStatus();
+        if (!status.isComplete) {
+          router.push('/wizard');
+          return;
+        }
+      } catch (statusErr) {
+        // If status check fails, continue to dashboard
+        console.error('Failed to check wizard status:', statusErr);
+      }
+      
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');

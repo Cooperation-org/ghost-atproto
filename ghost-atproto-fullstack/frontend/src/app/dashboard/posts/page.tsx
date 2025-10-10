@@ -23,7 +23,6 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
 import PendingIcon from '@mui/icons-material/Pending';
 import PublishIcon from '@mui/icons-material/Publish';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';

@@ -9,15 +9,17 @@ import {
   Typography,
   Alert,
   CircularProgress,
-  Divider,
   Grid,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
 import { User } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,7 +46,7 @@ export default function SettingsPage() {
           atprotoHandle: userData.atprotoHandle || '',
           atprotoAppPassword: '',
         });
-      } catch (err) {
+      } catch {
         setError('Failed to load user data');
       } finally {
         setLoading(false);
@@ -64,7 +66,13 @@ export default function SettingsPage() {
     setSuccess('');
 
     try {
-      const updateData: any = {
+      const updateData: {
+        name: string;
+        ghostUrl: string;
+        ghostApiKey: string;
+        atprotoHandle: string;
+        atprotoAppPassword?: string;
+      } = {
         name: formData.name,
         ghostUrl: formData.ghostUrl,
         ghostApiKey: formData.ghostApiKey,
@@ -97,9 +105,18 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <Typography variant="h4" gutterBottom>
-        Settings
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h4">
+          Settings
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<SettingsIcon />}
+          onClick={() => router.push('/wizard')}
+        >
+          Setup Wizard
+        </Button>
+      </Box>
 
       {success && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
@@ -118,7 +135,7 @@ export default function SettingsPage() {
           Profile
         </Typography>
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Email"
@@ -127,7 +144,7 @@ export default function SettingsPage() {
               helperText="Email cannot be changed"
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Display Name"
@@ -143,7 +160,7 @@ export default function SettingsPage() {
           Ghost Configuration
         </Typography>
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Ghost URL"
@@ -153,7 +170,7 @@ export default function SettingsPage() {
               helperText="Your Ghost blog URL"
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Ghost Admin API Key"
@@ -171,7 +188,7 @@ export default function SettingsPage() {
           Bluesky Configuration
         </Typography>
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Bluesky Handle"
@@ -181,7 +198,7 @@ export default function SettingsPage() {
               helperText="Your Bluesky username"
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Bluesky App Password"

@@ -89,6 +89,20 @@ class ApiClient {
     return this.request<SyncLog[]>('/api/auth/logs');
   }
 
+  // Manual Sync
+  async syncNow(limit?: number): Promise<{ 
+    message: string; 
+    success: boolean; 
+    syncedCount: number; 
+    skippedCount: number; 
+    totalProcessed: number;
+  }> {
+    return this.request('/api/auth/sync', {
+      method: 'POST',
+      body: JSON.stringify({ limit: limit || 5 }),
+    });
+  }
+
   // Health
   async health(): Promise<{ status: string; message: string }> {
     return this.request('/api/health');

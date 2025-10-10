@@ -51,7 +51,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       try {
         const userData = await api.getMe();
         setUser(userData);
-      } catch (error) {
+      } catch {
         router.push('/login');
       } finally {
         setLoading(false);
