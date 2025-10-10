@@ -13,24 +13,14 @@ import {
   Grid,
   Card,
   CardContent,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   Checkbox,
   FormControlLabel,
   FormGroup,
   Divider,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import CloudIcon from '@mui/icons-material/Cloud';
-import LinkIcon from '@mui/icons-material/Link';
 import TwitterIcon from '@mui/icons-material/Twitter';
-import ArticleIcon from '@mui/icons-material/Article';
-import PeopleIcon from '@mui/icons-material/People';
-import LabelIcon from '@mui/icons-material/Label';
-import EmailIcon from '@mui/icons-material/Email';
 import { useRouter } from 'next/navigation';
 import { wizardApi, GhostValidationResponse, BlueskyValidationResponse } from '@/lib/wizard-api';
 
@@ -48,8 +38,8 @@ export default function WizardPage() {
     ghostUrl: '',
     ghostApiKey: '',
     ghostContentApiKey: '',
-    atprotoHandle: '',
-    atprotoAppPassword: '',
+    blueskyHandle: '',
+    blueskyPassword: '',
   });
 
   const [importOptions, setImportOptions] = useState({
@@ -92,13 +82,13 @@ export default function WizardPage() {
       setLoading(false);
     } else if (activeStep === 1) {
       // Validate Bluesky
-      if (!formData.atprotoHandle || !formData.atprotoAppPassword) {
+      if (!formData.blueskyHandle || !formData.blueskyPassword) {
         setError('Please fill in all Bluesky fields');
         return;
       }
       setLoading(true);
       try {
-        const result = await wizardApi.validateBluesky(formData.atprotoHandle, formData.atprotoAppPassword);
+        const result = await wizardApi.validateBluesky(formData.blueskyHandle, formData.blueskyPassword);
         if (!result.valid) {
           setError(result.error || 'Bluesky validation failed');
           setLoading(false);
@@ -129,11 +119,6 @@ export default function WizardPage() {
     }
 
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
-  };
-
-  const handleBack = () => {
-    setError('');
-    setActiveStep((prevActiveStep) => prevActiveStep - 1);
   };
 
   const handleChange = (field: keyof typeof formData) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -356,7 +341,7 @@ export default function WizardPage() {
                         Ghost Not Connected
                       </Typography>
                       <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                        Please fill in your Ghost credentials and click "Sync Now" to connect your site
+                        Please fill in your Ghost credentials and click &quot;Sync Now&quot; to connect your site
                       </Typography>
                       <Box sx={{ 
                         p: 3, 
@@ -369,7 +354,7 @@ export default function WizardPage() {
                           ⚠️ Connection Required
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Enter your Ghost URL and API keys in the form on the left, then click the "Sync Now" button to establish connection.
+                          Enter your Ghost URL and API keys in the form on the left, then click the &quot;Sync Now&quot; button to establish connection.
                         </Typography>
                       </Box>
                       <Alert severity="info" sx={{ textAlign: 'left' }}>
@@ -426,8 +411,8 @@ export default function WizardPage() {
                       <TextField
                         fullWidth
                         label="Bluesky Handle"
-                        value={formData.atprotoHandle}
-                        onChange={handleChange('atprotoHandle')}
+                        value={formData.blueskyHandle}
+                        onChange={handleChange('blueskyHandle')}
                         placeholder="yourhandle.bsky.social"
                         disabled={loading}
                         variant="outlined"
@@ -439,8 +424,8 @@ export default function WizardPage() {
                         fullWidth
                         label="Bluesky App Password"
                         type="password"
-                        value={formData.atprotoAppPassword}
-                        onChange={handleChange('atprotoAppPassword')}
+                        value={formData.blueskyPassword}
+                        onChange={handleChange('blueskyPassword')}
                         placeholder="xxxx-xxxx-xxxx-xxxx"
                         disabled={loading}
                         variant="outlined"
@@ -711,7 +696,7 @@ export default function WizardPage() {
             </Box>
 
             <Alert severity="info" icon="💡" sx={{ mt: 4, fontSize: '0.95rem' }}>
-              <strong>Pro Tip:</strong> You can also manually sync posts anytime from your dashboard using the "Sync Now" button!
+              <strong>Pro Tip:</strong> You can also manually sync posts anytime from your dashboard using the &quot;Sync Now&quot; button!
             </Alert>
           </Box>
         );

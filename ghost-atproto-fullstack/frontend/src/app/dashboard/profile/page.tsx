@@ -67,8 +67,9 @@ export default function ProfilePage() {
     setSyncError('');
 
     try {
-      const result = await api.syncNow(5);
-      setSyncMessage(`✅ ${result.message} - Synced: ${result.syncedCount}, Skipped: ${result.skippedCount}`);
+      // Sync with higher limit (50 posts) and force update
+      const result = await api.syncNow(50, true);
+      setSyncMessage(`✅ ${result.message} - Synced: ${result.syncedCount}, Skipped: ${result.skippedCount}, Total: ${result.totalProcessed}`);
       
       // Reload stats after sync
       const statsData = await api.getProfileStats();

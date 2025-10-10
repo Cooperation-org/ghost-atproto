@@ -30,8 +30,9 @@ export default function SettingsPage() {
     name: '',
     ghostUrl: '',
     ghostApiKey: '',
-    atprotoHandle: '',
-    atprotoAppPassword: '',
+    ghostContentApiKey: '',
+    blueskyHandle: '',
+    blueskyPassword: '',
   });
 
   useEffect(() => {
@@ -43,8 +44,9 @@ export default function SettingsPage() {
           name: userData.name || '',
           ghostUrl: userData.ghostUrl || '',
           ghostApiKey: userData.ghostApiKey || '',
-          atprotoHandle: userData.atprotoHandle || '',
-          atprotoAppPassword: '',
+          ghostContentApiKey: userData.ghostContentApiKey || '',
+          blueskyHandle: userData.blueskyHandle || '',
+          blueskyPassword: userData.blueskyPassword || '',
         });
       } catch {
         setError('Failed to load user data');
@@ -70,17 +72,22 @@ export default function SettingsPage() {
         name: string;
         ghostUrl: string;
         ghostApiKey: string;
-        atprotoHandle: string;
-        atprotoAppPassword?: string;
+        ghostContentApiKey?: string;
+        blueskyHandle: string;
+        blueskyPassword?: string;
       } = {
         name: formData.name,
         ghostUrl: formData.ghostUrl,
         ghostApiKey: formData.ghostApiKey,
-        atprotoHandle: formData.atprotoHandle,
+        blueskyHandle: formData.blueskyHandle,
       };
 
-      if (formData.atprotoAppPassword) {
-        updateData.atprotoAppPassword = formData.atprotoAppPassword;
+      if (formData.ghostContentApiKey) {
+        updateData.ghostContentApiKey = formData.ghostContentApiKey;
+      }
+
+      if (formData.blueskyPassword) {
+        updateData.blueskyPassword = formData.blueskyPassword;
       }
 
       const updatedUser = await api.updateMe(updateData);
@@ -177,7 +184,17 @@ export default function SettingsPage() {
               value={formData.ghostApiKey}
               onChange={handleChange('ghostApiKey')}
               placeholder="xxxxxxxxxxxxxxxxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              helperText="Found in Ghost Admin → Integrations"
+              helperText="Required - Found in Ghost Admin → Integrations → Custom Integration"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              label="Ghost Content API Key (Optional)"
+              value={formData.ghostContentApiKey}
+              onChange={handleChange('ghostContentApiKey')}
+              placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              helperText="Optional - For public content access (found in Ghost Admin → Integrations)"
             />
           </Grid>
         </Grid>
@@ -192,8 +209,8 @@ export default function SettingsPage() {
             <TextField
               fullWidth
               label="Bluesky Handle"
-              value={formData.atprotoHandle}
-              onChange={handleChange('atprotoHandle')}
+              value={formData.blueskyHandle}
+              onChange={handleChange('blueskyHandle')}
               placeholder="yourhandle.bsky.social"
               helperText="Your Bluesky username"
             />
@@ -203,8 +220,8 @@ export default function SettingsPage() {
               fullWidth
               label="Bluesky App Password"
               type="password"
-              value={formData.atprotoAppPassword}
-              onChange={handleChange('atprotoAppPassword')}
+              value={formData.blueskyPassword}
+              onChange={handleChange('blueskyPassword')}
               placeholder="xxxx-xxxx-xxxx-xxxx"
               helperText="Generate app password in Bluesky Settings → App Passwords"
             />

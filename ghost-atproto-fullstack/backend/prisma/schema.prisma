@@ -17,15 +17,19 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // ATProto/Bluesky credentials (hybrid approach)
-  atprotoHandle      String? // Bluesky handle (e.g., user.bsky.social)
-  atprotoAppPassword String? // App password (fallback auth method)
-  atprotoDid         String? // Decentralized identifier
+  // NEW: Add these Bluesky fields
+  blueskyHandle      String? @map("bluesky_handle")
+  blueskyPassword    String? @map("bluesky_password")
+  blueskyDid         String? // Decentralized identifier
 
   // Ghost integration (supports any Ghost server)
-  ghostApiKey    String? // Ghost Admin API key
-  ghostUrl       String? // Full Ghost server URL (e.g., https://blog.example.com)
-  ghostWebhookId String? // Ghost webhook ID for this integration
+  // Ghost fields
+  ghostApiKey        String? @map("ghost_api_key")
+  ghostUrl           String? @map("ghost_url")
+  ghostWebhookId     String? @map("ghost_webhook_id")
+  
+  // NEW: Add Ghost Content API Key
+  ghostContentApiKey String? @map("ghost_content_api_key")
 
   // Relations
   posts         Post[]
@@ -60,11 +64,13 @@ model OAuthSession {
 }
 
 model Post {
-  id      String @id @default(cuid())
-  title   String
-  content String @db.Text
-  slug    String
-  status  String @default("draft") // draft, published, scheduled
+  id           String @id @default(cuid())
+  title        String
+  content      String @db.Text
+  excerpt      String? @db.Text
+  slug         String
+  status       String @default("draft") // draft, published, scheduled
+  featureImage String?
 
   // Ghost data
   ghostId   String? @unique

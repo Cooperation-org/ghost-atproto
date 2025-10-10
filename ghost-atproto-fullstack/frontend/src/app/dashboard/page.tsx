@@ -11,17 +11,17 @@ import {
   CircularProgress,
   Button,
   Alert,
+  Avatar,
+  Chip,
 } from '@mui/material';
 import ArticleIcon from '@mui/icons-material/Article';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
 import SyncIcon from '@mui/icons-material/Sync';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
-import { Post, SyncLog, User } from '@/lib/types';
+import { Post } from '@/lib/types';
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -31,11 +31,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [userData, postsData] = await Promise.all([
-          api.getMe(),
-          api.getAllPosts(), // Get ALL posts from ALL users
-        ]);
-        setUser(userData);
+        const postsData = await api.getAllPosts(); // Get ALL posts from ALL users
         setPosts(postsData);
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
@@ -53,9 +49,10 @@ export default function DashboardPage() {
     setSyncError('');
 
     try {
-      const result = await api.syncNow(5);
+      // Sync with higher limit (50 posts) and force update
+      const result = await api.syncNow(50, true);
       setSyncMessage(`✅ ${result.message} - Synced: ${result.syncedCount}, Skipped: ${result.skippedCount}, Total: ${result.totalProcessed}`);
-      
+
       // Reload posts after sync
       const updatedPosts = await api.getAllPosts();
       setPosts(updatedPosts);
@@ -78,142 +75,262 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h4" gutterBottom>
-            All Articles
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Showing all synced articles from all connected authors
-          </Typography>
-        </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 600 }}>
+          Articles
+        </Typography>
         <Button
           variant="contained"
           startIcon={syncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
           onClick={handleSyncNow}
           disabled={syncing}
+          sx={{ 
+            textTransform: 'none',
+            px: 3,
+            py: 1,
+            borderRadius: 2
+          }}
         >
           {syncing ? 'Syncing...' : 'Sync Now'}
         </Button>
       </Box>
 
       {syncMessage && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSyncMessage('')}>
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSyncMessage('')}>
           {syncMessage}
         </Alert>
       )}
 
       {syncError && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSyncError('')}>
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setSyncError('')}>
           {syncError}
         </Alert>
       )}
 
-      {/* Stats Card */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <ArticleIcon color="primary" sx={{ mr: 1 }} />
-                <Typography color="textSecondary" variant="h6">
-                  Total Articles
-                </Typography>
-              </Box>
-              <Typography variant="h3">{posts.length}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                From all connected authors
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <CheckCircleIcon color="success" sx={{ mr: 1 }} />
-                <Typography color="textSecondary" variant="h6">
-                  Synced to Bluesky
-                </Typography>
-              </Box>
-              <Typography variant="h3">{posts.filter(p => p.atprotoUri).length}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                Successfully published
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <ArticleIcon color="info" sx={{ mr: 1 }} />
-                <Typography color="textSecondary" variant="h6">
-                  Pending
-                </Typography>
-              </Box>
-              <Typography variant="h3">{posts.filter(p => !p.atprotoUri).length}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                Not yet synced
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Posts List */}
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Recent Articles
-        </Typography>
-        {posts.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No articles yet. Complete the wizard to start syncing posts!
+      {/* Articles Grid */}
+      {posts.length === 0 ? (
+        <Paper 
+          sx={{ 
+            p: 8, 
+            textAlign: 'center', 
+            borderRadius: 3,
+            border: '2px dashed',
+            borderColor: 'grey.300',
+            bgcolor: 'grey.50'
+          }}
+        >
+          <Box
+            sx={{
+              width: 80,
+              height: 80,
+              borderRadius: '50%',
+              bgcolor: 'primary.light',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mx: 'auto',
+              mb: 3
+            }}
+          >
+            <ArticleIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+          </Box>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+            No Articles Yet
           </Typography>
-        ) : (
-          <Box sx={{ mt: 2 }}>
-            {posts.slice(0, 20).map((post: any) => (
-              <Card key={post.id} sx={{ mb: 2 }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="h6" gutterBottom>
-                        {post.title}
-                      </Typography>
-                      {post.content && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                          {post.content.substring(0, 150)}...
-                        </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
+            Connect your Ghost site to start syncing articles to Bluesky automatically
+          </Typography>
+          <Button 
+            variant="contained" 
+            size="large"
+            onClick={() => window.location.href = '/wizard'}
+            sx={{ 
+              textTransform: 'none',
+              px: 4,
+              py: 1.5,
+              borderRadius: 2,
+              fontWeight: 600
+            }}
+          >
+            Setup Your Connection
+          </Button>
+        </Paper>
+      ) : (
+        <Grid container spacing={4}>
+          {posts.map((post: Post & { user?: { id: string; email: string; name?: string | null } }, index: number) => {
+            // Generate a gradient based on index
+            const gradients = [
+              'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+              'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+              'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+            ];
+            const gradient = gradients[index % gradients.length];
+
+            return (
+              <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={post.id}>
+                <Card 
+                  sx={{ 
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    border: '1px solid',
+                    borderColor: 'grey.200',
+                    '&:hover': {
+                      transform: 'translateY(-8px)',
+                      boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
+                      borderColor: 'primary.main',
+                    }
+                  }}
+                >
+                  {/* Featured Image Placeholder */}
+                  <Box
+                    sx={{
+                      height: 200,
+                      background: gradient,
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {/* Status Badge Overlay */}
+                    <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+                      {post.atprotoUri ? (
+                        <Chip 
+                          icon={<CheckCircleIcon />}
+                          label="Synced" 
+                          size="small"
+                          sx={{ 
+                            bgcolor: 'rgba(255, 255, 255, 0.95)',
+                            color: 'success.main',
+                            fontWeight: 600,
+                            backdropFilter: 'blur(10px)'
+                          }}
+                        />
+                      ) : (
+                        <Chip 
+                          label="Pending" 
+                          size="small" 
+                          sx={{ 
+                            bgcolor: 'rgba(255, 255, 255, 0.95)',
+                            color: 'warning.main',
+                            fontWeight: 600,
+                            backdropFilter: 'blur(10px)'
+                          }}
+                        />
                       )}
-                      <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+                    </Box>
+                    
+                    {/* Article Icon */}
+                    <ArticleIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.3)' }} />
+                  </Box>
+
+                  <CardContent sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column' }}>
+                    {/* Title */}
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        fontWeight: 700,
+                        lineHeight: 1.4,
+                        mb: 2,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        color: 'text.primary',
+                        minHeight: '3.5rem'
+                      }}
+                    >
+                      {post.title}
+                    </Typography>
+
+                    {/* Excerpt */}
+                    {post.content && (
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary" 
+                        sx={{ 
+                          mb: 3,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          lineHeight: 1.7,
+                          flexGrow: 1
+                        }}
+                      >
+                        {post.content.replace(/<[^>]*>/g, '').substring(0, 150)}...
+                      </Typography>
+                    )}
+
+                    {/* Footer Section */}
+                    <Box sx={{ mt: 'auto' }}>
+                      {/* Author & Date */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                         {post.user && (
-                          <Typography variant="caption" color="text.secondary">
-                            By: {post.user.name || post.user.email}
-                          </Typography>
-                        )}
-                        {post.ghostUrl && (
-                          <Typography variant="caption" color="primary">
-                            <a href={post.ghostUrl} target="_blank" rel="noopener noreferrer">
-                              View on Ghost →
-                            </a>
-                          </Typography>
-                        )}
-                        {post.atprotoUri && (
-                          <Typography variant="caption" color="success.main">
-                            ✓ Synced to Bluesky
-                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar 
+                              sx={{ 
+                                width: 32, 
+                                height: 32, 
+                                fontSize: '0.875rem',
+                                bgcolor: 'primary.main',
+                                fontWeight: 600
+                              }}
+                            >
+                              {(post.user.name?.[0] || post.user.email[0]).toUpperCase()}
+                            </Avatar>
+                            <Box>
+                              <Typography variant="caption" display="block" fontWeight={600}>
+                                {post.user.name || post.user.email.split('@')[0]}
+                              </Typography>
+                              {post.publishedAt && (
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  {new Date(post.publishedAt).toLocaleDateString('en-US', { 
+                                    month: 'short', 
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </Typography>
+                              )}
+                            </Box>
+                          </Box>
                         )}
                       </Box>
+
+                      {/* View Link */}
+                      <Button
+                        onClick={() => window.location.href = `/article/${post.id}`}
+                        fullWidth
+                        variant="outlined"
+                        sx={{ 
+                          textTransform: 'none',
+                          borderRadius: 2,
+                          py: 1,
+                          fontWeight: 600,
+                          '&:hover': {
+                            bgcolor: 'primary.main',
+                            color: 'white',
+                            borderColor: 'primary.main'
+                          }
+                        }}
+                      >
+                        Read Full Article →
+                      </Button>
                     </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            ))}
-          </Box>
-        )}
-      </Paper>
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+      )}
     </DashboardLayout>
   );
 }

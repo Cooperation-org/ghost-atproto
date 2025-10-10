@@ -2,9 +2,11 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
-  atprotoHandle: string | null;
+  blueskyHandle: string | null;
+  blueskyPassword: string | null;
   ghostUrl: string | null;
   ghostApiKey: string | null;
+  ghostContentApiKey: string | null;
   createdAt: string;
 }
 
@@ -12,8 +14,10 @@ export interface Post {
   id: string;
   title: string;
   content: string;
+  excerpt: string | null;
   slug: string;
   status: string;
+  featureImage: string | null;
   ghostId: string | null;
   ghostSlug: string | null;
   ghostUrl: string | null;
@@ -23,6 +27,12 @@ export interface Post {
   createdAt: string;
   updatedAt: string;
   userId: string;
+  user?: {
+    id: string;
+    email: string;
+    name?: string | null;
+    blueskyHandle?: string | null;
+  };
 }
 
 export interface SyncLog {

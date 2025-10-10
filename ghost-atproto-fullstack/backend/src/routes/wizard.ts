@@ -110,12 +110,12 @@ router.post('/validate-ghost', authenticateToken, async (req, res) => {
  */
 router.post('/validate-bluesky', authenticateToken, async (req, res) => {
   try {
-    const { atprotoHandle, atprotoAppPassword } = req.body;
+    const { blueskyHandle, blueskyPassword } = req.body;
 
-    if (!atprotoHandle || !atprotoAppPassword) {
+    if (!blueskyHandle || !blueskyPassword) {
       return res.status(400).json({ 
         valid: false, 
-        error: 'Bluesky handle and app password are required' 
+        error: 'Bluesky handle and password are required' 
       });
     }
 
@@ -126,15 +126,15 @@ router.post('/validate-bluesky', authenticateToken, async (req, res) => {
 
     try {
       const loginResult = await agent.login({
-        identifier: atprotoHandle,
-        password: atprotoAppPassword,
+        identifier: blueskyHandle,
+        password: blueskyPassword,
       });
 
       // Fetch profile to get display name
-      let displayName = atprotoHandle;
+      let displayName = blueskyHandle;
       try {
         const profile = await agent.getProfile({ actor: loginResult.data.did });
-        displayName = profile.data.displayName || atprotoHandle;
+        displayName = profile.data.displayName || blueskyHandle;
       } catch (profileErr) {
         // If profile fetch fails, use handle as display name
         console.warn('Failed to fetch profile:', profileErr);
@@ -174,16 +174,17 @@ router.post('/complete', authenticateToken, async (req, res) => {
     const userId = (req as any).userId;
     const { 
       ghostUrl, 
-      ghostApiKey, 
-      atprotoHandle, 
-      atprotoAppPassword,
-      name 
+      ghostApiKey,
+      ghostContentApiKey,
+      blueskyHandle, 
+      blueskyPassword,
+      name
     } = req.body;
 
     // Validate all required fields
-    if (!ghostUrl || !ghostApiKey || !atprotoHandle || !atprotoAppPassword) {
+    if (!ghostUrl || !ghostApiKey || !blueskyHandle || !blueskyPassword) {
       return res.status(400).json({ 
-        error: 'All configuration fields are required' 
+        error: 'Ghost URL, Admin API key, Bluesky handle, and password are required' 
       });
     }
 
@@ -194,8 +195,9 @@ router.post('/complete', authenticateToken, async (req, res) => {
         name: name || undefined,
         ghostUrl,
         ghostApiKey,
-        atprotoHandle,
-        atprotoAppPassword,
+        ghostContentApiKey: ghostContentApiKey || undefined,
+        blueskyHandle,
+        blueskyPassword,
       },
       select: {
         id: true,
@@ -203,7 +205,9 @@ router.post('/complete', authenticateToken, async (req, res) => {
         name: true,
         ghostUrl: true,
         ghostApiKey: true,
-        atprotoHandle: true,
+        ghostContentApiKey: true,
+        blueskyHandle: true,
+        blueskyPassword: true,
         createdAt: true
       }
     });
@@ -237,7 +241,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
       // Trigger sync without waiting for it to complete
       axios.post(
         `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/sync`,
-        { limit: 5 },
+        { limit: 50, force: false },
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -299,8 +303,9 @@ router.get('/status', authenticateToken, async (req, res) => {
       select: {
         ghostUrl: true,
         ghostApiKey: true,
-        atprotoHandle: true,
-        atprotoAppPassword: true,
+        ghostContentApiKey: true,
+        blueskyHandle: true,
+        blueskyPassword: true,
       }
     });
 
@@ -311,14 +316,14 @@ router.get('/status', authenticateToken, async (req, res) => {
     const isComplete = !!(
       user.ghostUrl && 
       user.ghostApiKey && 
-      user.atprotoHandle && 
-      user.atprotoAppPassword
+      user.blueskyHandle && 
+      user.blueskyPassword
     );
 
     return res.json({
       isComplete,
       hasGhost: !!(user.ghostUrl && user.ghostApiKey),
-      hasBluesky: !!(user.atprotoHandle && user.atprotoAppPassword),
+      hasBluesky: !!(user.blueskyHandle && user.blueskyPassword),
     });
 
   } catch (error) {

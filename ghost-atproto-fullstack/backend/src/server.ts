@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { NodeOAuthClient } from '@atproto/oauth-client-node';
-import { BskyAgent } from '@atproto/api';
+import { BskyAgent, RichText } from '@atproto/api';
 import path from 'path';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
@@ -94,12 +94,12 @@ async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
   }
 
   // Fallback to app password
-  if (user.atprotoHandle && user.atprotoAppPassword) {
+  if (user.blueskyHandle && user.blueskyPassword) {
     try {
       const agent = new BskyAgent({ service: process.env.ATPROTO_SERVICE || 'https://bsky.social' });
       await agent.login({
-        identifier: user.atprotoHandle,
-        password: user.atprotoAppPassword,
+        identifier: user.blueskyHandle,
+        password: user.blueskyPassword,
       });
       return agent;
     } catch (error) {
@@ -111,14 +111,19 @@ async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
   return null;
 }
 
-// Helper: Post to Bluesky
+// Helper: Post to Bluesky with clickable links
 async function postToBluesky(agent: BskyAgent, text: string, url?: string) {
-  const postText = url ? `${text}\n\n${url}` : text;
+  const postText = url ? `${text}\n\nRead more: ${url}` : text;
   const maxLength = 300;
   const truncated = postText.length > maxLength ? postText.slice(0, maxLength - 3) + '...' : postText;
 
+  // Use RichText to detect and create link facets
+  const rt = new RichText({ text: truncated });
+  await rt.detectFacets(agent);
+
   return await agent.post({
-    text: truncated,
+    text: rt.text,
+    facets: rt.facets,
     createdAt: new Date().toISOString(),
   });
 }
@@ -130,7 +135,8 @@ async function syncGhostToBluesky(
   ghostApiKey: string,
   blueskyHandle: string,
   blueskyPassword: string,
-  limit: number = 5
+  limit: number = 50,
+  force: boolean = false
 ) {
   try {
     console.log(`\n🔄 Starting sync for ${ghostUrl} (user: ${userId})...`);
@@ -171,7 +177,7 @@ async function syncGhostToBluesky(
         limit,
         filter: 'status:published',
         order: 'published_at DESC',
-        fields: 'id,title,slug,excerpt,custom_excerpt,url,published_at'
+        fields: 'id,title,slug,excerpt,custom_excerpt,html,plaintext,feature_image,url,published_at'
       }
     });
 
@@ -183,35 +189,56 @@ async function syncGhostToBluesky(
 
     // 3. Process each post
     for (const post of posts) {
-      // Check if already shared
+      // Check if already shared (unless force is true)
       const existing = await prisma.post.findFirst({
         where: {
           ghostId: post.id,
           userId,
-          atprotoUri: { not: null }
         }
       });
 
-      if (existing) {
+      if (existing && existing.atprotoUri && !force) {
         console.log(`⏭️  Skipping "${post.title}" - already shared`);
         skippedCount++;
         continue;
       }
+      
+      // If force is true and post exists, we'll update it with full content
+      if (existing && force) {
+        console.log(`🔄 Force updating "${post.title}" with full content...`);
+      }
 
-      // Create Bluesky post
+      // Create Bluesky post only if it doesn't already exist on Bluesky
       const excerpt = post.excerpt || post.custom_excerpt || '';
+      const fullContent = post.html || post.plaintext || '';
       const blueskyText = `${post.title}\n\n${excerpt.substring(0, 200)}${excerpt.length > 200 ? '...' : ''}\n\nRead more: ${post.url}`;
 
       try {
-        const blueskyResult = await agent.post({
-          text: blueskyText,
-          createdAt: new Date().toISOString(),
-        });
+        let blueskyResult;
+        
+        // Only post to Bluesky if not already posted
+        if (!existing || !existing.atprotoUri) {
+          // Use RichText to detect and create link facets for clickable links
+          const rt = new RichText({ text: blueskyText });
+          await rt.detectFacets(agent);
 
-        // Save to database
+          blueskyResult = await agent.post({
+            text: rt.text,
+            facets: rt.facets,
+            createdAt: new Date().toISOString(),
+          });
+        } else {
+          // Use existing Bluesky URI if already posted
+          blueskyResult = { uri: existing.atprotoUri, cid: existing.atprotoCid };
+        }
+
+        // Save to database with full content
         await prisma.post.upsert({
           where: { ghostId: post.id },
           update: {
+            content: fullContent,
+            excerpt: excerpt,
+            featureImage: post.feature_image,
             atprotoUri: blueskyResult.uri,
             atprotoCid: blueskyResult.cid,
             status: 'published',
@@ -219,8 +246,10 @@ async function syncGhostToBluesky(
           },
           create: {
             title: post.title,
-            content: excerpt,
+            content: fullContent,
+            excerpt: excerpt,
             slug: post.slug,
+            featureImage: post.feature_image,
             status: 'published',
             ghostId: post.id,
             ghostSlug: post.slug,
@@ -356,6 +385,8 @@ app.post(
             if (isPublished) {
               const title = postPayload.title || 'Untitled';
               const content = postPayload.html || postPayload.plaintext || '';
+              const excerpt = postPayload.excerpt || postPayload.custom_excerpt || '';
+              const featureImage = postPayload.feature_image || null;
               const slug = postPayload.slug || undefined;
               const ghostSlug = postPayload.slug || null;
               const ghostUrl = postPayload.url || null;
@@ -366,6 +397,8 @@ app.post(
                 update: {
                   title,
                   content,
+                  excerpt,
+                  featureImage,
                   slug: slug || (ghostSlug ? `${ghostSlug}` : undefined) || `ghost-${ghostEntityId}`,
                   status: 'published',
                   publishedAt: new Date(),
@@ -375,6 +408,8 @@ app.post(
                 create: {
                   title,
                   content,
+                  excerpt,
+                  featureImage,
                   slug: slug || (ghostSlug ? `${ghostSlug}` : `ghost-${ghostEntityId}`),
                   status: 'published',
                   publishedAt: new Date(),
@@ -490,7 +525,7 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        atprotoHandle: user.atprotoHandle,
+        blueskyHandle: user.blueskyHandle,
         ghostUrl: user.ghostUrl
       },
       token
@@ -514,9 +549,11 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         id: true,
         email: true,
         name: true,
-        atprotoHandle: true,
+        blueskyHandle: true,
+        blueskyPassword: true,
         ghostUrl: true,
         ghostApiKey: true,
+        ghostContentApiKey: true,
         createdAt: true
       }
     });
@@ -534,24 +571,27 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 app.put('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { name, atprotoHandle, atprotoAppPassword, ghostUrl, ghostApiKey } = req.body;
+    const { name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey, ghostContentApiKey } = req.body;
 
     const user = await prisma.user.update({
       where: { id: userId },
       data: {
         name: name !== undefined ? name : undefined,
-        atprotoHandle: atprotoHandle !== undefined ? atprotoHandle : undefined,
-        atprotoAppPassword: atprotoAppPassword !== undefined ? atprotoAppPassword : undefined,
+        blueskyHandle: blueskyHandle !== undefined ? blueskyHandle : undefined,
+        blueskyPassword: blueskyPassword !== undefined ? blueskyPassword : undefined,
         ghostUrl: ghostUrl !== undefined ? ghostUrl : undefined,
         ghostApiKey: ghostApiKey !== undefined ? ghostApiKey : undefined,
+        ghostContentApiKey: ghostContentApiKey !== undefined ? ghostContentApiKey : undefined,
       },
       select: {
         id: true,
         email: true,
         name: true,
-        atprotoHandle: true,
+        blueskyHandle: true,
+        blueskyPassword: true,
         ghostUrl: true,
         ghostApiKey: true,
+        ghostContentApiKey: true,
         createdAt: true
       }
     });
@@ -644,7 +684,7 @@ app.get('/api/auth/profile/stats', authenticateToken, async (req, res) => {
 app.post('/api/auth/sync', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { limit } = req.body;
+    const { limit, force } = req.body;
 
     // Get user credentials
     const user = await prisma.user.findUnique({
@@ -652,8 +692,9 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
       select: {
         ghostUrl: true,
         ghostApiKey: true,
-        atprotoHandle: true,
-        atprotoAppPassword: true
+        ghostContentApiKey: true,
+        blueskyHandle: true,
+        blueskyPassword: true
       }
     });
 
@@ -662,21 +703,22 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
     }
 
     if (!user.ghostUrl || !user.ghostApiKey) {
-      return res.status(400).json({ error: 'Ghost credentials not configured' });
+      return res.status(400).json({ error: 'Ghost Admin API key and URL are required for syncing' });
     }
 
-    if (!user.atprotoHandle || !user.atprotoAppPassword) {
+    if (!user.blueskyHandle || !user.blueskyPassword) {
       return res.status(400).json({ error: 'Bluesky credentials not configured' });
     }
 
-    // Run sync
+    // Run sync with higher default limit (50 posts) and force option
     const result = await syncGhostToBluesky(
       userId,
       user.ghostUrl,
       user.ghostApiKey,
-      user.atprotoHandle,
-      user.atprotoAppPassword,
-      limit || 5
+      user.blueskyHandle,
+      user.blueskyPassword,
+      limit || 50,
+      force || false
     );
 
     res.json({
@@ -734,7 +776,7 @@ app.get('/api/users', async (req, res) => {
         id: true,
         email: true,
         name: true,
-        atprotoHandle: true,
+        blueskyHandle: true,
         ghostUrl: true,
         createdAt: true,
       }
@@ -747,7 +789,7 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
-    const { email, name, atprotoHandle, atprotoAppPassword, ghostUrl, ghostApiKey } = req.body;
+    const { email, name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
@@ -757,8 +799,8 @@ app.post('/api/users', async (req, res) => {
       data: {
         email,
         name: name || null,
-        atprotoHandle: atprotoHandle || null,
-        atprotoAppPassword: atprotoAppPassword || null,
+        blueskyHandle: blueskyHandle || null,
+        blueskyPassword: blueskyPassword || null,
         ghostUrl: ghostUrl || null,
         ghostApiKey: ghostApiKey || null,
       }
@@ -773,14 +815,14 @@ app.post('/api/users', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, atprotoHandle, atprotoAppPassword, ghostUrl, ghostApiKey } = req.body;
+    const { name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     const user = await prisma.user.update({
       where: { id },
       data: {
         name: name !== undefined ? name : undefined,
-        atprotoHandle: atprotoHandle !== undefined ? atprotoHandle : undefined,
-        atprotoAppPassword: atprotoAppPassword !== undefined ? atprotoAppPassword : undefined,
+        blueskyHandle: blueskyHandle !== undefined ? blueskyHandle : undefined,
+        blueskyPassword: blueskyPassword !== undefined ? blueskyPassword : undefined,
         ghostUrl: ghostUrl !== undefined ? ghostUrl : undefined,
         ghostApiKey: ghostApiKey !== undefined ? ghostApiKey : undefined,
       }
@@ -837,6 +879,35 @@ app.get('/api/posts', async (req, res) => {
     res.json(posts);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch posts' });
+  }
+});
+
+// Get single post by ID (public - anyone can read articles)
+app.get('/api/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const post = await prisma.post.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            blueskyHandle: true,
+          }
+        }
+      }
+    });
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    res.json(post);
+  } catch (error) {
+    console.error('Fetch post error:', error);
+    res.status(500).json({ error: 'Failed to fetch post' });
   }
 });
 

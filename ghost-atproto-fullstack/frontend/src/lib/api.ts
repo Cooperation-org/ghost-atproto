@@ -85,6 +85,11 @@ class ApiClient {
     return this.request<Post[]>('/api/posts');
   }
 
+  // Get single post by ID
+  async getPostById(id: string): Promise<Post> {
+    return this.request<Post>(`/api/posts/${id}`);
+  }
+
   // Get current user's posts (for profile)
   async getPosts(): Promise<Post[]> {
     return this.request<Post[]>('/api/auth/posts');
@@ -107,7 +112,7 @@ class ApiClient {
   }
 
   // Manual Sync
-  async syncNow(limit?: number): Promise<{ 
+  async syncNow(limit?: number, force?: boolean): Promise<{ 
     message: string; 
     success: boolean; 
     syncedCount: number; 
@@ -116,7 +121,7 @@ class ApiClient {
   }> {
     return this.request('/api/auth/sync', {
       method: 'POST',
-      body: JSON.stringify({ limit: limit || 5 }),
+      body: JSON.stringify({ limit: limit || 50, force: force || false }),
     });
   }
 

@@ -27,7 +27,7 @@ export interface WizardCompleteResponse {
     email: string;
     name?: string;
     ghostUrl?: string;
-    atprotoHandle?: string;
+    blueskyHandle?: string;
   };
   webhookUrl: string;
   nextSteps: {
@@ -87,18 +87,19 @@ class WizardApiClient {
     });
   }
 
-  async validateBluesky(atprotoHandle: string, atprotoAppPassword: string): Promise<BlueskyValidationResponse> {
+  async validateBluesky(blueskyHandle: string, blueskyPassword: string): Promise<BlueskyValidationResponse> {
     return this.request<BlueskyValidationResponse>('/api/wizard/validate-bluesky', {
       method: 'POST',
-      body: JSON.stringify({ atprotoHandle, atprotoAppPassword }),
+      body: JSON.stringify({ blueskyHandle, blueskyPassword }),
     });
   }
 
   async completeWizard(data: {
     ghostUrl: string;
     ghostApiKey: string;
-    atprotoHandle: string;
-    atprotoAppPassword: string;
+    ghostContentApiKey?: string;
+    blueskyHandle: string;
+    blueskyPassword: string;
     name?: string;
   }): Promise<WizardCompleteResponse> {
     return this.request<WizardCompleteResponse>('/api/wizard/complete', {
