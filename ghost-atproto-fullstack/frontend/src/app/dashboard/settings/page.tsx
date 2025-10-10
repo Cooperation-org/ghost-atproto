@@ -9,15 +9,17 @@ import {
   Typography,
   Alert,
   CircularProgress,
-  Divider,
   Grid,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
 import { User } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,8 +30,9 @@ export default function SettingsPage() {
     name: '',
     ghostUrl: '',
     ghostApiKey: '',
-    atprotoHandle: '',
-    atprotoAppPassword: '',
+    ghostContentApiKey: '',
+    blueskyHandle: '',
+    blueskyPassword: '',
   });
 
   useEffect(() => {
@@ -41,10 +44,11 @@ export default function SettingsPage() {
           name: userData.name || '',
           ghostUrl: userData.ghostUrl || '',
           ghostApiKey: userData.ghostApiKey || '',
-          atprotoHandle: userData.atprotoHandle || '',
-          atprotoAppPassword: '',
+          ghostContentApiKey: userData.ghostContentApiKey || '',
+          blueskyHandle: userData.blueskyHandle || '',
+          blueskyPassword: userData.blueskyPassword || '',
         });
-      } catch (err) {
+      } catch {
         setError('Failed to load user data');
       } finally {
         setLoading(false);
@@ -64,15 +68,26 @@ export default function SettingsPage() {
     setSuccess('');
 
     try {
-      const updateData: any = {
+      const updateData: {
+        name: string;
+        ghostUrl: string;
+        ghostApiKey: string;
+        ghostContentApiKey?: string;
+        blueskyHandle: string;
+        blueskyPassword?: string;
+      } = {
         name: formData.name,
         ghostUrl: formData.ghostUrl,
         ghostApiKey: formData.ghostApiKey,
-        atprotoHandle: formData.atprotoHandle,
+        blueskyHandle: formData.blueskyHandle,
       };
 
-      if (formData.atprotoAppPassword) {
-        updateData.atprotoAppPassword = formData.atprotoAppPassword;
+      if (formData.ghostContentApiKey) {
+        updateData.ghostContentApiKey = formData.ghostContentApiKey;
+      }
+
+      if (formData.blueskyPassword) {
+        updateData.blueskyPassword = formData.blueskyPassword;
       }
 
       const updatedUser = await api.updateMe(updateData);
@@ -97,9 +112,18 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <Typography variant="h4" gutterBottom>
-        Settings
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h4">
+          Settings
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<SettingsIcon />}
+          onClick={() => router.push('/wizard')}
+        >
+          Setup Wizard
+        </Button>
+      </Box>
 
       {success && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
@@ -118,7 +142,7 @@ export default function SettingsPage() {
           Profile
         </Typography>
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Email"
@@ -127,7 +151,7 @@ export default function SettingsPage() {
               helperText="Email cannot be changed"
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Display Name"
@@ -143,7 +167,7 @@ export default function SettingsPage() {
           Ghost Configuration
         </Typography>
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Ghost URL"
@@ -153,14 +177,24 @@ export default function SettingsPage() {
               helperText="Your Ghost blog URL"
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Ghost Admin API Key"
               value={formData.ghostApiKey}
               onChange={handleChange('ghostApiKey')}
               placeholder="xxxxxxxxxxxxxxxxxxxxxxxx:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-              helperText="Found in Ghost Admin → Integrations"
+              helperText="Required - Found in Ghost Admin → Integrations → Custom Integration"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              label="Ghost Content API Key (Optional)"
+              value={formData.ghostContentApiKey}
+              onChange={handleChange('ghostContentApiKey')}
+              placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              helperText="Optional - For public content access (found in Ghost Admin → Integrations)"
             />
           </Grid>
         </Grid>
@@ -171,23 +205,23 @@ export default function SettingsPage() {
           Bluesky Configuration
         </Typography>
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Bluesky Handle"
-              value={formData.atprotoHandle}
-              onChange={handleChange('atprotoHandle')}
+              value={formData.blueskyHandle}
+              onChange={handleChange('blueskyHandle')}
               placeholder="yourhandle.bsky.social"
               helperText="Your Bluesky username"
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
               label="Bluesky App Password"
               type="password"
-              value={formData.atprotoAppPassword}
-              onChange={handleChange('atprotoAppPassword')}
+              value={formData.blueskyPassword}
+              onChange={handleChange('blueskyPassword')}
               placeholder="xxxx-xxxx-xxxx-xxxx"
               helperText="Generate app password in Bluesky Settings → App Passwords"
             />

@@ -80,6 +80,17 @@ class ApiClient {
   }
 
   // Posts
+  // Get all posts from all users (for dashboard)
+  async getAllPosts(): Promise<Post[]> {
+    return this.request<Post[]>('/api/posts');
+  }
+
+  // Get single post by ID
+  async getPostById(id: string): Promise<Post> {
+    return this.request<Post>(`/api/posts/${id}`);
+  }
+
+  // Get current user's posts (for profile)
   async getPosts(): Promise<Post[]> {
     return this.request<Post[]>('/api/auth/posts');
   }
@@ -87,6 +98,31 @@ class ApiClient {
   // Logs
   async getLogs(): Promise<SyncLog[]> {
     return this.request<SyncLog[]>('/api/auth/logs');
+  }
+
+  // Get profile stats
+  async getProfileStats(): Promise<{
+    totalPosts: number;
+    successfulSyncs: number;
+    failedSyncs: number;
+    recentPosts: Post[];
+    recentLogs: SyncLog[];
+  }> {
+    return this.request('/api/auth/profile/stats');
+  }
+
+  // Manual Sync
+  async syncNow(limit?: number, force?: boolean): Promise<{ 
+    message: string; 
+    success: boolean; 
+    syncedCount: number; 
+    skippedCount: number; 
+    totalProcessed: number;
+  }> {
+    return this.request('/api/auth/sync', {
+      method: 'POST',
+      body: JSON.stringify({ limit: limit || 50, force: force || false }),
+    });
   }
 
   // Health

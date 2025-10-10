@@ -4,12 +4,14 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { NodeOAuthClient } from '@atproto/oauth-client-node';
-import { BskyAgent } from '@atproto/api';
+import { BskyAgent, RichText } from '@atproto/api';
 import path from 'path';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import atprotoRoutes from './routes/atproto';
+import wizardRoutes from './routes/wizard';
+import axios from 'axios';
 
 // Load environment variables
 dotenv.config();
@@ -26,7 +28,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:3000',
+    'http://localhost:3001', // Allow port 3001 as well
+    'http://localhost:3000'
+  ],
   credentials: true
 }));
 
@@ -88,12 +94,12 @@ async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
   }
 
   // Fallback to app password
-  if (user.atprotoHandle && user.atprotoAppPassword) {
+  if (user.blueskyHandle && user.blueskyPassword) {
     try {
       const agent = new BskyAgent({ service: process.env.ATPROTO_SERVICE || 'https://bsky.social' });
       await agent.login({
-        identifier: user.atprotoHandle,
-        password: user.atprotoAppPassword,
+        identifier: user.blueskyHandle,
+        password: user.blueskyPassword,
       });
       return agent;
     } catch (error) {
@@ -105,16 +111,238 @@ async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
   return null;
 }
 
-// Helper: Post to Bluesky
-async function postToBluesky(agent: BskyAgent, text: string, url?: string) {
-  const postText = url ? `${text}\n\n${url}` : text;
-  const maxLength = 300;
-  const truncated = postText.length > maxLength ? postText.slice(0, maxLength - 3) + '...' : postText;
+// Helper: Post to Bluesky with clickable links and better content formatting
+async function postToBluesky(agent: BskyAgent, title: string, content?: string, url?: string) {
+  // Strip HTML tags and get clean text from content
+  const cleanContent = content 
+    ? content.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+    : '';
+  
+  // Create a better formatted post with maximum content
+  // Bluesky limit is 300 chars, so we maximize the content
+  const urlText = url ? `\n\n🔗 ${url}` : '';
+  const titleText = `${title}\n\n`;
+  const maxContentLength = 300 - titleText.length - urlText.length;
+  
+  let contentToPost = cleanContent;
+  if (contentToPost.length > maxContentLength) {
+    contentToPost = contentToPost.substring(0, maxContentLength - 3) + '...';
+  }
+  
+  const postText = `${titleText}${contentToPost}${urlText}`;
+
+  // Use RichText to detect and create link facets
+  const rt = new RichText({ text: postText });
+  await rt.detectFacets(agent);
 
   return await agent.post({
-    text: truncated,
+    text: rt.text,
+    facets: rt.facets,
     createdAt: new Date().toISOString(),
   });
+}
+
+// Helper: Sync Ghost posts to Bluesky
+async function syncGhostToBluesky(
+  userId: string,
+  ghostUrl: string,
+  ghostApiKey: string,
+  blueskyHandle: string,
+  blueskyPassword: string,
+  limit: number = 50,
+  force: boolean = false
+) {
+  try {
+    console.log(`\n🔄 Starting sync for ${ghostUrl} (user: ${userId})...`);
+
+    // 1. Authenticate with Bluesky
+    const agent = new BskyAgent({ 
+      service: process.env.ATPROTO_SERVICE || 'https://bsky.social' 
+    });
+    
+    await agent.login({
+      identifier: blueskyHandle,
+      password: blueskyPassword,
+    });
+    
+    console.log(`🦋 Authenticated as ${blueskyHandle}`);
+
+    // 2. Fetch Ghost posts using Admin API
+    const [keyId, keySecret] = ghostApiKey.split(':');
+    if (!keyId || !keySecret) {
+      throw new Error('Invalid Ghost API key format');
+    }
+
+    // Create JWT token for Ghost Admin API
+    const token = jwt.sign({}, Buffer.from(keySecret, 'hex'), {
+      keyid: keyId,
+      algorithm: 'HS256',
+      expiresIn: '5m',
+      audience: `/admin/`
+    });
+
+    const ghostApiUrl = `${ghostUrl}/ghost/api/admin/posts/`;
+    const response = await axios.get(ghostApiUrl, {
+      headers: {
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v5.0'
+      },
+      params: {
+        limit,
+        filter: 'status:published',
+        order: 'published_at DESC',
+        fields: 'id,title,slug,excerpt,custom_excerpt,html,plaintext,mobiledoc,lexical,feature_image,url,published_at',
+        formats: 'html,plaintext,mobiledoc'  // Explicitly request all content formats
+      }
+    });
+
+    const posts = response.data.posts || [];
+    console.log(`📖 Found ${posts.length} posts`);
+
+    let syncedCount = 0;
+    let skippedCount = 0;
+
+    // 3. Process each post
+    for (const post of posts) {
+      // Check if already shared (unless force is true)
+      const existing = await prisma.post.findFirst({
+        where: {
+          ghostId: post.id,
+          userId,
+        }
+      });
+
+      if (existing && existing.atprotoUri && !force) {
+        console.log(`⏭️  Skipping "${post.title}" - already shared`);
+        skippedCount++;
+        continue;
+      }
+      
+      // If force is true and post exists, we'll update it with full content
+      if (existing && force) {
+        console.log(`🔄 Force updating "${post.title}" with full content...`);
+      }
+
+      // Create Bluesky post only if it doesn't already exist on Bluesky
+      const excerpt = post.excerpt || post.custom_excerpt || '';
+      const fullContent = post.html || post.plaintext || '';
+      
+      // Log content status for debugging
+      console.log(`📝 Processing "${post.title}": Content length = ${fullContent.length} chars`);
+      
+      // Strip HTML tags and get clean text
+      const cleanText = fullContent.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+      
+      // Create a better formatted post with more content
+      // Bluesky limit is 300 chars, so we maximize the content
+      const urlText = `\n\n🔗 ${post.url}`;
+      const titleText = `${post.title}\n\n`;
+      const maxContentLength = 300 - titleText.length - urlText.length;
+      
+      let contentToPost = excerpt || cleanText;
+      if (contentToPost.length > maxContentLength) {
+        contentToPost = contentToPost.substring(0, maxContentLength - 3) + '...';
+      }
+      
+      const blueskyText = `${titleText}${contentToPost}${urlText}`;
+
+      try {
+        let blueskyResult;
+        
+        // Only post to Bluesky if not already posted
+        if (!existing || !existing.atprotoUri) {
+          // Use RichText to detect and create link facets for clickable links
+          const rt = new RichText({ text: blueskyText });
+          await rt.detectFacets(agent);
+
+          blueskyResult = await agent.post({
+            text: rt.text,
+            facets: rt.facets,
+            createdAt: new Date().toISOString(),
+          });
+        } else {
+          // Use existing Bluesky URI if already posted
+          blueskyResult = { uri: existing.atprotoUri, cid: existing.atprotoCid };
+        }
+
+        // Save to database with full content
+        await prisma.post.upsert({
+          where: { ghostId: post.id },
+          update: {
+            content: fullContent,
+            excerpt: excerpt,
+            featureImage: post.feature_image,
+            atprotoUri: blueskyResult.uri,
+            atprotoCid: blueskyResult.cid,
+            status: 'published',
+            publishedAt: new Date(post.published_at)
+          },
+          create: {
+            title: post.title,
+            content: fullContent,
+            excerpt: excerpt,
+            slug: post.slug,
+            featureImage: post.feature_image,
+            status: 'published',
+            ghostId: post.id,
+            ghostSlug: post.slug,
+            ghostUrl: post.url,
+            atprotoUri: blueskyResult.uri,
+            atprotoCid: blueskyResult.cid,
+            publishedAt: new Date(post.published_at),
+            userId
+          }
+        });
+
+        // Log the sync
+        await prisma.syncLog.create({
+          data: {
+            action: 'publish',
+            status: 'success',
+            source: 'ghost',
+            target: 'atproto',
+            ghostId: post.id,
+            atprotoUri: blueskyResult.uri,
+            userId
+          }
+        });
+
+        console.log(`✅ Shared "${post.title}" to Bluesky`);
+        syncedCount++;
+
+        // Rate limiting - wait 2 seconds between posts
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (postError) {
+        console.error(`❌ Failed to share "${post.title}":`, postError);
+        
+        // Log the error
+        await prisma.syncLog.create({
+          data: {
+            action: 'publish',
+            status: 'error',
+            source: 'ghost',
+            target: 'atproto',
+            ghostId: post.id,
+            error: postError instanceof Error ? postError.message : 'Unknown error',
+            userId
+          }
+        });
+      }
+    }
+
+    console.log(`✨ Sync complete for ${ghostUrl}: ${syncedCount} synced, ${skippedCount} skipped\n`);
+    
+    return {
+      success: true,
+      syncedCount,
+      skippedCount,
+      totalProcessed: posts.length
+    };
+
+  } catch (error) {
+    console.error(`❌ Sync error for ${ghostUrl}:`, error);
+    throw error;
+  }
 }
 
 // Ghost webhook - must come BEFORE express.json()
@@ -190,6 +418,8 @@ app.post(
             if (isPublished) {
               const title = postPayload.title || 'Untitled';
               const content = postPayload.html || postPayload.plaintext || '';
+              const excerpt = postPayload.excerpt || postPayload.custom_excerpt || '';
+              const featureImage = postPayload.feature_image || null;
               const slug = postPayload.slug || undefined;
               const ghostSlug = postPayload.slug || null;
               const ghostUrl = postPayload.url || null;
@@ -200,6 +430,8 @@ app.post(
                 update: {
                   title,
                   content,
+                  excerpt,
+                  featureImage,
                   slug: slug || (ghostSlug ? `${ghostSlug}` : undefined) || `ghost-${ghostEntityId}`,
                   status: 'published',
                   publishedAt: new Date(),
@@ -209,6 +441,8 @@ app.post(
                 create: {
                   title,
                   content,
+                  excerpt,
+                  featureImage,
                   slug: slug || (ghostSlug ? `${ghostSlug}` : `ghost-${ghostEntityId}`),
                   status: 'published',
                   publishedAt: new Date(),
@@ -223,7 +457,9 @@ app.post(
               const agent = await getAgentForUser(userId);
               if (agent) {
                 try {
-                  const result = await postToBluesky(agent, title, ghostUrl || undefined);
+                  // Use excerpt if available, otherwise use content
+                  const contentToSend = excerpt || content;
+                  const result = await postToBluesky(agent, title, contentToSend, ghostUrl || undefined);
 
                   // Update post with ATProto data
                   await prisma.post.update({
@@ -287,6 +523,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/atproto', atprotoRoutes);
+app.use('/api/wizard', wizardRoutes);
 
 
 app.get('/api/health', (req, res) => {
@@ -323,7 +560,7 @@ app.post('/api/auth/login', async (req, res) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        atprotoHandle: user.atprotoHandle,
+        blueskyHandle: user.blueskyHandle,
         ghostUrl: user.ghostUrl
       },
       token
@@ -347,9 +584,11 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         id: true,
         email: true,
         name: true,
-        atprotoHandle: true,
+        blueskyHandle: true,
+        blueskyPassword: true,
         ghostUrl: true,
         ghostApiKey: true,
+        ghostContentApiKey: true,
         createdAt: true
       }
     });
@@ -367,24 +606,27 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 app.put('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { name, atprotoHandle, atprotoAppPassword, ghostUrl, ghostApiKey } = req.body;
+    const { name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey, ghostContentApiKey } = req.body;
 
     const user = await prisma.user.update({
       where: { id: userId },
       data: {
         name: name !== undefined ? name : undefined,
-        atprotoHandle: atprotoHandle !== undefined ? atprotoHandle : undefined,
-        atprotoAppPassword: atprotoAppPassword !== undefined ? atprotoAppPassword : undefined,
+        blueskyHandle: blueskyHandle !== undefined ? blueskyHandle : undefined,
+        blueskyPassword: blueskyPassword !== undefined ? blueskyPassword : undefined,
         ghostUrl: ghostUrl !== undefined ? ghostUrl : undefined,
         ghostApiKey: ghostApiKey !== undefined ? ghostApiKey : undefined,
+        ghostContentApiKey: ghostContentApiKey !== undefined ? ghostContentApiKey : undefined,
       },
       select: {
         id: true,
         email: true,
         name: true,
-        atprotoHandle: true,
+        blueskyHandle: true,
+        blueskyPassword: true,
         ghostUrl: true,
         ghostApiKey: true,
+        ghostContentApiKey: true,
         createdAt: true
       }
     });
@@ -423,6 +665,107 @@ app.get('/api/auth/logs', authenticateToken, async (req, res) => {
     res.json(logs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch logs' });
+  }
+});
+
+// Get current user's profile stats
+app.get('/api/auth/profile/stats', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    
+    // Get total posts synced
+    const totalPosts = await prisma.post.count({
+      where: { userId, atprotoUri: { not: null } }
+    });
+    
+    // Get successful syncs
+    const successfulSyncs = await prisma.syncLog.count({
+      where: { userId, status: 'success' }
+    });
+    
+    // Get failed syncs
+    const failedSyncs = await prisma.syncLog.count({
+      where: { userId, status: 'error' }
+    });
+    
+    // Get recent posts
+    const recentPosts = await prisma.post.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    });
+    
+    // Get recent logs
+    const recentLogs = await prisma.syncLog.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+    
+    res.json({
+      totalPosts,
+      successfulSyncs,
+      failedSyncs,
+      recentPosts,
+      recentLogs
+    });
+  } catch (error) {
+    console.error('Profile stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch profile stats' });
+  }
+});
+
+// Manual sync endpoint - sync Ghost posts to Bluesky
+app.post('/api/auth/sync', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { limit, force } = req.body;
+
+    // Get user credentials
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        ghostUrl: true,
+        ghostApiKey: true,
+        ghostContentApiKey: true,
+        blueskyHandle: true,
+        blueskyPassword: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (!user.ghostUrl || !user.ghostApiKey) {
+      return res.status(400).json({ error: 'Ghost Admin API key and URL are required for syncing' });
+    }
+
+    if (!user.blueskyHandle || !user.blueskyPassword) {
+      return res.status(400).json({ error: 'Bluesky credentials not configured' });
+    }
+
+    // Run sync with higher default limit (50 posts) and force option
+    const result = await syncGhostToBluesky(
+      userId,
+      user.ghostUrl,
+      user.ghostApiKey,
+      user.blueskyHandle,
+      user.blueskyPassword,
+      limit || 50,
+      force || false
+    );
+
+    res.json({
+      message: 'Sync completed successfully',
+      ...result
+    });
+
+  } catch (error) {
+    console.error('Manual sync error:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Sync failed' 
+    });
   }
 });
 
@@ -468,7 +811,7 @@ app.get('/api/users', async (req, res) => {
         id: true,
         email: true,
         name: true,
-        atprotoHandle: true,
+        blueskyHandle: true,
         ghostUrl: true,
         createdAt: true,
       }
@@ -481,7 +824,7 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
-    const { email, name, atprotoHandle, atprotoAppPassword, ghostUrl, ghostApiKey } = req.body;
+    const { email, name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
@@ -491,8 +834,8 @@ app.post('/api/users', async (req, res) => {
       data: {
         email,
         name: name || null,
-        atprotoHandle: atprotoHandle || null,
-        atprotoAppPassword: atprotoAppPassword || null,
+        blueskyHandle: blueskyHandle || null,
+        blueskyPassword: blueskyPassword || null,
         ghostUrl: ghostUrl || null,
         ghostApiKey: ghostApiKey || null,
       }
@@ -507,14 +850,14 @@ app.post('/api/users', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, atprotoHandle, atprotoAppPassword, ghostUrl, ghostApiKey } = req.body;
+    const { name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     const user = await prisma.user.update({
       where: { id },
       data: {
         name: name !== undefined ? name : undefined,
-        atprotoHandle: atprotoHandle !== undefined ? atprotoHandle : undefined,
-        atprotoAppPassword: atprotoAppPassword !== undefined ? atprotoAppPassword : undefined,
+        blueskyHandle: blueskyHandle !== undefined ? blueskyHandle : undefined,
+        blueskyPassword: blueskyPassword !== undefined ? blueskyPassword : undefined,
         ghostUrl: ghostUrl !== undefined ? ghostUrl : undefined,
         ghostApiKey: ghostApiKey !== undefined ? ghostApiKey : undefined,
       }
@@ -574,6 +917,35 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
+// Get single post by ID (public - anyone can read articles)
+app.get('/api/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const post = await prisma.post.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            blueskyHandle: true,
+          }
+        }
+      }
+    });
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    res.json(post);
+  } catch (error) {
+    console.error('Fetch post error:', error);
+    res.status(500).json({ error: 'Failed to fetch post' });
+  }
+});
+
 // Sync Logs
 app.get('/api/sync-logs', async (req, res) => {
   try {
@@ -595,7 +967,14 @@ bridgeApp.use(app._router);
 
 // Create a new app that handles both root and /bridge prefix
 const finalApp = express();
-finalApp.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000', credentials: true }));
+finalApp.use(cors({ 
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3000'
+  ], 
+  credentials: true 
+}));
 finalApp.use('/bridge', app);
 finalApp.use('/', app);
 

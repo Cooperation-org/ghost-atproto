@@ -1,69 +1,59 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   Box,
-  Drawer,
   AppBar,
   Toolbar,
-  List,
   Typography,
   Divider,
   IconButton,
-  ListItem,
-  ListItemButton,
   ListItemIcon,
-  ListItemText,
   CircularProgress,
   Avatar,
   Menu,
   MenuItem,
+  Chip,
 } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
-import DashboardIcon from '@mui/icons-material/Dashboard';
 import SettingsIcon from '@mui/icons-material/Settings';
-import ArticleIcon from '@mui/icons-material/Article';
-import SyncIcon from '@mui/icons-material/Sync';
 import LogoutIcon from '@mui/icons-material/Logout';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import ArticleIcon from '@mui/icons-material/Article';
+import CloudIcon from '@mui/icons-material/Cloud';
 import { api } from '@/lib/api';
 import { User } from '@/lib/types';
 
-const drawerWidth = 240;
-
-const menuItems = [
-  { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-  { text: 'Posts', icon: <ArticleIcon />, path: '/dashboard/posts' },
-  { text: 'Sync Logs', icon: <SyncIcon />, path: '/dashboard/logs' },
-  { text: 'Settings', icon: <SettingsIcon />, path: '/dashboard/settings' },
-];
-
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [stats, setStats] = useState<{
+    totalPosts: number;
+    successfulSyncs: number;
+    failedSyncs: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
-    const loadUser = async () => {
+    const loadData = async () => {
       try {
-        const userData = await api.getMe();
+        const [userData, statsData] = await Promise.all([
+          api.getMe(),
+          api.getProfileStats(),
+        ]);
         setUser(userData);
-      } catch (error) {
+        setStats(statsData);
+      } catch {
         router.push('/login');
       } finally {
         setLoading(false);
       }
     };
 
-    loadUser();
+    loadData();
   }, [router]);
-
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
 
   const handleProfileClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -71,6 +61,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const handleProfileClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleSettings = () => {
+    handleProfileClose();
+    router.push('/dashboard/settings');
   };
 
   const handleLogout = async () => {
@@ -86,66 +81,125 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const drawer = (
-    <div>
-      <Toolbar>
-        <Typography variant="h6" noWrap component="div">
-          Ghost Bridge
-        </Typography>
-      </Toolbar>
-      <Divider />
-      <List>
-        {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
-            <ListItemButton
-              selected={pathname === item.path}
-              onClick={() => router.push(item.path)}
-            >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
-          </ListItem>
-        ))}
-      </List>
-    </div>
-  );
-
   return (
-    <Box sx={{ display: 'flex' }}>
-      <AppBar
-        position="fixed"
-        sx={{
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
-        }}
-      >
+    <Box sx={{ minHeight: '100vh', bgcolor: '#fafafa' }}>
+      {/* Top Navigation Bar */}
+      <AppBar position="fixed" sx={{ bgcolor: 'white', color: 'text.primary', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
         <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
+          <Box 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 1, 
+              flexGrow: 1,
+              cursor: 'pointer',
+              '&:hover': {
+                opacity: 0.8
+              }
+            }}
+            onClick={() => router.push('/dashboard')}
           >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {menuItems.find((item) => item.path === pathname)?.text || 'Dashboard'}
-          </Typography>
+            <CloudIcon sx={{ color: 'primary.main', fontSize: 32 }} />
+            <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>
+              civicsky
+            </Typography>
+          </Box>
+          
+          {/* Profile Avatar with Dropdown */}
           <IconButton onClick={handleProfileClick} sx={{ p: 0 }}>
-            <Avatar sx={{ bgcolor: 'secondary.main' }}>
-              {user?.name?.[0] || user?.email[0].toUpperCase()}
+            <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+              {user?.name?.[0]?.toUpperCase() || user?.email[0].toUpperCase()}
             </Avatar>
           </IconButton>
+          
+          {/* Profile Dropdown Menu */}
           <Menu
             anchorEl={anchorEl}
             open={Boolean(anchorEl)}
             onClose={handleProfileClose}
+            PaperProps={{
+              sx: { minWidth: 280, mt: 1 }
+            }}
           >
-            <MenuItem disabled>
-              <Typography variant="body2">{user?.email}</Typography>
-            </MenuItem>
+            {/* User Info */}
+            <Box sx={{ px: 2, py: 1.5 }}>
+              <Typography variant="subtitle1" fontWeight={600}>
+                {user?.name || 'User'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {user?.email}
+              </Typography>
+            </Box>
+            
             <Divider />
+            
+            {/* Profile Stats - Clickable */}
+            <MenuItem 
+              onClick={() => {
+                handleProfileClose();
+                router.push('/dashboard/profile');
+              }}
+              sx={{ py: 2 }}
+            >
+              <Box sx={{ width: '100%' }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mb: 1.5, display: 'block' }}>
+                  MY STATS
+                </Typography>
+                
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ArticleIcon fontSize="small" color="primary" />
+                      <Typography variant="body2">Posts Synced</Typography>
+                    </Box>
+                    <Chip 
+                      label={stats?.totalPosts || 0} 
+                      size="small" 
+                      color="primary"
+                    />
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CheckCircleIcon fontSize="small" color="success" />
+                      <Typography variant="body2">Successful</Typography>
+                    </Box>
+                    <Chip 
+                      label={stats?.successfulSyncs || 0} 
+                      size="small" 
+                      color="success"
+                    />
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <ErrorIcon fontSize="small" color="error" />
+                      <Typography variant="body2">Failed</Typography>
+                    </Box>
+                    <Chip 
+                      label={stats?.failedSyncs || 0} 
+                      size="small" 
+                      color="error"
+                    />
+                  </Box>
+                </Box>
+                
+                <Typography variant="caption" color="primary.main" sx={{ mt: 1.5, display: 'block', textAlign: 'right' }}>
+                  View Details →
+                </Typography>
+              </Box>
+            </MenuItem>
+            
+            <Divider />
+            
+            {/* Settings & Logout */}
+            <MenuItem onClick={handleSettings}>
+              <ListItemIcon>
+                <SettingsIcon fontSize="small" />
+              </ListItemIcon>
+              Settings
+            </MenuItem>
+            
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>
                 <LogoutIcon fontSize="small" />
@@ -155,40 +209,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </Menu>
         </Toolbar>
       </AppBar>
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-      >
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{ keepMounted: true }}
-          sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-        >
-          {drawer}
-        </Drawer>
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
+      
+      {/* Main Content - Full Width */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: 8,
+          pt: 10,
+          maxWidth: '1400px',
+          mx: 'auto',
         }}
       >
         {children}
