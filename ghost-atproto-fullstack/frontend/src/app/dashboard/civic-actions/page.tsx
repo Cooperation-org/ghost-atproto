@@ -1,0 +1,679 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Paper,
+  Typography,
+  Box,
+  Card,
+  CardContent,
+  CircularProgress,
+  Button,
+  Chip,
+  CardMedia,
+  Avatar,
+  Stack,
+  TextField,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+} from '@mui/material';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import PeopleIcon from '@mui/icons-material/People';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import SearchIcon from '@mui/icons-material/Search';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { api } from '@/lib/api';
+
+interface EventTimeslot {
+  start_date: number;
+  end_date: number;
+  id: number;
+  is_full: boolean;
+}
+
+interface EventSponsor {
+  name: string;
+  logo_url?: string;
+  org_type: string;
+  state?: string;
+}
+
+interface CivicEvent {
+  id: number;
+  title: string;
+  summary: string;
+  description: string;
+  event_type?: string | null;
+  featured_image_url?: string;
+  timeslots: EventTimeslot[];
+  sponsor: EventSponsor;
+  location?: {
+    venue?: string;
+    locality?: string;
+    region?: string;
+  };
+  browser_url: string;
+  is_virtual: boolean;
+  timezone: string;
+}
+
+interface CivicEventsResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  data: CivicEvent[];
+}
+
+export default function CivicActionsPage() {
+  const [events, setEvents] = useState<CivicEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Set<number>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  const loadEvents = useCallback(async (cursor?: string, append = false) => {
+    try {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
+      const response: CivicEventsResponse = await api.getCivicEvents({ cursor });
+      
+      if (append) {
+        setEvents(prev => {
+          // Filter out duplicate events by ID
+          const existingIds = new Set(prev.map(event => event.id));
+          const newEvents = response.data.filter(event => !existingIds.has(event.id));
+          return [...prev, ...newEvents];
+        });
+      } else {
+        setEvents(response.data);
+      }
+      
+      setNextCursor(response.next);
+      setHasMore(!!response.next);
+    } catch (error) {
+      console.error('Failed to load civic events:', error);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, []);
+
+  const loadMoreEvents = useCallback(() => {
+    if (nextCursor && !loadingMore) {
+      loadEvents(nextCursor, true);
+    }
+  }, [nextCursor, loadingMore, loadEvents]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  // Infinite scroll effect
+  useEffect(() => {
+    const handleScroll = () => {
+      if (
+        window.innerHeight + document.documentElement.scrollTop >=
+        document.documentElement.offsetHeight - 1000 && // Load when 1000px from bottom
+        hasMore &&
+        !loadingMore &&
+        !loading
+      ) {
+        loadMoreEvents();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [hasMore, loadingMore, loading, loadMoreEvents]);
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
+  const getEventTypeColor = (type?: string | null) => {
+    if (!type) return '#757575';
+    const colors: Record<string, string> = {
+      'CANVASS': '#1976d2',
+      'PHONE_BANK': '#2e7d32',
+      'TEXT_BANK': '#7b1fa2',
+      'MEETING': '#d32f2f',
+      'COMMUNITY': '#f57c00',
+      'TRAINING': '#0288d1',
+    };
+    return colors[type] || '#757575';
+  };
+
+  const handleImageError = (eventId: number) => {
+    setImageErrors(prev => new Set(prev).add(eventId));
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+          <CircularProgress />
+        </Box>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout>
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
+          Civic Actions Management
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Discover and participate in civic engagement events in your community
+        </Typography>
+      </Box>
+
+      {/* Search and Filter Bar */}
+      <Paper
+        sx={{
+          p: 3,
+          mb: 4,
+          borderRadius: 2,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        }}
+      >
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 2, 
+          alignItems: 'center', 
+          flexWrap: 'wrap',
+          flexDirection: { xs: 'column', sm: 'row' },
+        }}>
+          {/* Search Bar */}
+          <TextField
+            placeholder="Search actions..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{
+              width: { xs: '100%', sm: 300 },
+              minWidth: { xs: 'auto', sm: 300 },
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+              },
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+              }
+            }}
+          />
+
+          {/* Filters Row */}
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2, 
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            width: { xs: '100%', sm: 'auto' },
+            justifyContent: { xs: 'space-between', sm: 'flex-start' },
+          }}>
+            {/* Category Filter */}
+            <FormControl sx={{ 
+              minWidth: { xs: 'calc(50% - 8px)', sm: 150 },
+              width: { xs: 'auto', sm: 'auto' },
+            }}>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={categoryFilter}
+                label="Category"
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                sx={{ borderRadius: 2 }}
+              >
+                <MenuItem value="">All Categories</MenuItem>
+                <MenuItem value="CANVASS">Canvass</MenuItem>
+                <MenuItem value="PHONE_BANK">Phone Bank</MenuItem>
+                <MenuItem value="TEXT_BANK">Text Bank</MenuItem>
+                <MenuItem value="MEETING">Meeting</MenuItem>
+                <MenuItem value="COMMUNITY">Community</MenuItem>
+                <MenuItem value="TRAINING">Training</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Status Filter */}
+            <FormControl sx={{ 
+              minWidth: { xs: 'calc(50% - 8px)', sm: 120 },
+              width: { xs: 'auto', sm: 'auto' },
+            }}>
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={statusFilter}
+                label="Status"
+                onChange={(e) => setStatusFilter(e.target.value)}
+                sx={{ borderRadius: 2 }}
+              >
+                <MenuItem value="">All Status</MenuItem>
+                <MenuItem value="approved">Approved</MenuItem>
+                <MenuItem value="pending">Pending</MenuItem>
+                <MenuItem value="rejected">Rejected</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Sort By */}
+            <FormControl sx={{ 
+              minWidth: { xs: 'calc(50% - 8px)', sm: 120 },
+              width: { xs: 'auto', sm: 'auto' },
+            }}>
+              <InputLabel>Sort By</InputLabel>
+              <Select
+                value="date"
+                label="Sort By"
+                sx={{ borderRadius: 2 }}
+              >
+                <MenuItem value="date">Date</MenuItem>
+                <MenuItem value="title">Title</MenuItem>
+                <MenuItem value="type">Type</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* Create New Action Button */}
+          <Button
+            variant="contained"
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+              py: 1.5,
+              fontWeight: 600,
+              ml: { xs: 0, sm: 'auto' },
+              width: { xs: '100%', sm: 'auto' },
+              mt: { xs: 1, sm: 0 },
+            }}
+          >
+            Create New Action
+          </Button>
+        </Box>
+      </Paper>
+
+      {/* Events Grid */}
+      {events.length === 0 && !loading ? (
+        <Paper
+          sx={{
+            p: 8,
+            textAlign: 'center',
+            borderRadius: 3,
+            border: '2px dashed',
+            borderColor: 'grey.300',
+            bgcolor: 'grey.50',
+          }}
+        >
+          <Box
+            sx={{
+              width: 80,
+              height: 80,
+              borderRadius: '50%',
+              bgcolor: 'primary.light',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mx: 'auto',
+              mb: 3,
+            }}
+          >
+            <CampaignIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+          </Box>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
+            No Events Available
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Check back soon for civic engagement opportunities
+          </Typography>
+        </Paper>
+      ) : (
+        <>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 3,
+              width: '100%',
+            }}
+          >
+            {events.map((event, index) => {
+              const gradients = [
+                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+                'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+                'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+                'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+              ];
+              const gradient = gradients[index % gradients.length];
+
+              return (
+                <Box
+                  key={`${event.id}-${index}`}
+                  sx={{
+                    width: {
+                      xs: '100%',
+                      sm: 'calc(50% - 12px)',
+                      md: 'calc(33.333% - 16px)',
+                    },
+                    minWidth: 0,
+                  }}
+                >
+                  <Card
+                    sx={{
+                      height: 420,
+                      width: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      borderRadius: 3,
+                      overflow: 'hidden',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      border: '1px solid',
+                      borderColor: 'grey.200',
+                      '&:hover': {
+                        transform: 'translateY(-8px)',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
+                        borderColor: 'primary.main',
+                      },
+                    }}
+                  >
+                    {/* Featured Image or Gradient */}
+                    {event.featured_image_url && !imageErrors.has(event.id) ? (
+                      <CardMedia
+                        component="img"
+                        height="180"
+                        image={event.featured_image_url}
+                        alt={event.title}
+                        sx={{ objectFit: 'cover' }}
+                        onError={() => handleImageError(event.id)}
+                      />
+                    ) : (
+                      <Box
+                        sx={{
+                          height: 180,
+                          background: gradient,
+                          position: 'relative',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <CampaignIcon sx={{ fontSize: 48, color: 'rgba(255,255,255,0.3)' }} />
+                      </Box>
+                    )}
+
+                    {/* Event Type Badge */}
+                    <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+                      <Chip
+                        label={(event.event_type ?? 'OTHER').replace(/_/g, ' ')}
+                        size="small"
+                        sx={{
+                          bgcolor: 'rgba(255, 255, 255, 0.95)',
+                          color: getEventTypeColor(event.event_type),
+                          fontWeight: 600,
+                          backdropFilter: 'blur(10px)',
+                        }}
+                      />
+                    </Box>
+
+                    <CardContent sx={{ 
+                      flexGrow: 1, 
+                      p: 2, 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      height: 240,
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      overflow: 'hidden',
+                    }}>
+                      {/* Title */}
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          fontWeight: 700,
+                          lineHeight: 1.2,
+                          mb: 1,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                          color: 'text.primary',
+                          fontSize: '1rem',
+                          minHeight: '2.4rem',
+                          width: '100%',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {event.title}
+                      </Typography>
+
+                      {/* Summary */}
+                      {event.summary && (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{
+                            mb: 1.5,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            lineHeight: 1.4,
+                            fontSize: '0.8rem',
+                            width: '100%',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {event.summary}
+                        </Typography>
+                      )}
+
+                      {/* Event Details */}
+                      <Stack spacing={0.5} sx={{ mb: 1.5, flexGrow: 1, width: '100%' }}>
+                        {/* Date & Time */}
+                        {event.timeslots?.length > 0 && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', minWidth: 0 }}>
+                            <CalendarTodayIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
+                            <Typography 
+                              variant="caption" 
+                              color="text.secondary" 
+                              sx={{ 
+                                fontSize: '0.7rem',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                flex: 1,
+                              }}
+                            >
+                              {formatDate(event.timeslots[0].start_date)} at{' '}
+                              {formatTime(event.timeslots[0].start_date)}
+                            </Typography>
+                          </Box>
+                        )}
+
+                        {/* Location */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', minWidth: 0 }}>
+                          <LocationOnIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
+                          <Typography 
+                            variant="caption" 
+                            color="text.secondary" 
+                            sx={{ 
+                              fontSize: '0.7rem',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              flex: 1,
+                            }}
+                          >
+                            {(() => {
+                              if (event.is_virtual) return 'Virtual Event';
+                              if (event.location?.locality && event.location?.region) {
+                                return `${event.location.locality}, ${event.location.region}`;
+                              }
+                              return 'Location TBA';
+                            })()}
+                          </Typography>
+                        </Box>
+
+                        {/* Organizer */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', minWidth: 0 }}>
+                          {event.sponsor.logo_url ? (
+                            <Avatar
+                              src={event.sponsor.logo_url}
+                              alt={event.sponsor.name}
+                              sx={{ width: 18, height: 18, flexShrink: 0 }}
+                            />
+                          ) : (
+                            <PeopleIcon sx={{ fontSize: 14, color: 'primary.main', flexShrink: 0 }} />
+                          )}
+                          <Typography 
+                            variant="caption" 
+                            color="text.secondary" 
+                            sx={{ 
+                              fontSize: '0.7rem',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              flex: 1,
+                            }}
+                          >
+                            {event.sponsor.name}
+                          </Typography>
+                        </Box>
+                      </Stack>
+
+                      {/* Actions */}
+                      <Box sx={{ display: 'flex', gap: 1, mt: 'auto', width: '100%' }}>
+                        <Button
+                          variant="outlined"
+                          sx={{
+                            textTransform: 'none',
+                            borderRadius: 2,
+                            py: 0.5,
+                            fontWeight: 600,
+                            fontSize: '0.8rem',
+                            flex: 1,
+                            minWidth: 0,
+                            '&:hover': {
+                              bgcolor: 'primary.main',
+                              color: 'white',
+                              borderColor: 'primary.main',
+                            },
+                          }}
+                          onClick={() => window.open(event.browser_url, '_blank')}
+                        >
+                          Learn More
+                        </Button>
+                        <Button
+                          variant="contained"
+                          sx={{
+                            textTransform: 'none',
+                            borderRadius: 2,
+                            py: 0.5,
+                            fontWeight: 600,
+                            minWidth: 90,
+                            maxWidth: 90,
+                            fontSize: '0.8rem',
+                            flexShrink: 0,
+                          }}
+                          disabled
+                        >
+                          Add to Article
+                        </Button>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Box>
+              );
+            })}
+          </Box>
+
+          {/* Loading More Indicator */}
+          {loadingMore && (
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              mt: 4,
+              mb: 2,
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <CircularProgress size={24} />
+                <Typography variant="body2" color="text.secondary">
+                  Loading more events...
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
+          {/* Load More Button */}
+          {hasMore && events.length > 0 && !loadingMore && (
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              mt: 4,
+              mb: 2,
+            }}>
+              <Button
+                variant="outlined"
+                onClick={loadMoreEvents}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: 2,
+                  px: 4,
+                  py: 1.5,
+                  fontWeight: 600,
+                  minWidth: 150,
+                }}
+              >
+                Load More Events
+              </Button>
+            </Box>
+          )}
+
+          {/* No More Events Message */}
+          {!hasMore && events.length > 0 && (
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              mt: 4,
+              mb: 2,
+            }}>
+              <Typography variant="body2" color="text.secondary">
+                No more events to load
+              </Typography>
+            </Box>
+          )}
+        </>
+      )}
+    </DashboardLayout>
+  );
+}

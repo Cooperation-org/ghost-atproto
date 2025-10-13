@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import morgan from 'morgan'
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
@@ -27,6 +28,8 @@ let oauthClient: NodeOAuthClient | null = null;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Middleware
+app.use(morgan('dev'));
+
 app.use(cors({
   origin: [
     process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -947,6 +950,48 @@ app.get('/api/posts/:id', async (req, res) => {
 });
 
 // Sync Logs
+// Civic Events (Mobilize API Proxy)
+app.get('/api/civic-events', async (req, res) => {
+  try {
+    const { cursor, zipcode, organization_id } = req.query;
+    
+    // Build query params - handle cursor properly
+    const params = new URLSearchParams();
+    if (cursor) {
+      // If cursor is a full URL, extract just the cursor value
+      if (cursor.toString().startsWith('http')) {
+        try {
+          const url = new URL(cursor.toString());
+          const cursorValue = url.searchParams.get('cursor');
+          if (cursorValue) {
+            params.append('cursor', cursorValue);
+          }
+        } catch (e) {
+          console.error('Invalid cursor URL:', cursor);
+        }
+      } else {
+        // If cursor is just the value, decode it first
+        const decodedCursor = decodeURIComponent(cursor as string);
+        params.append('cursor', decodedCursor);
+      }
+    }
+    if (zipcode) params.append('zipcode', zipcode as string);
+    if (organization_id) params.append('organization_id', organization_id as string);
+    
+    const queryString = params.toString();
+    const baseUrl = 'https://api.mobilize.us/v1/events';
+    const url = queryString ? `${baseUrl}?${queryString}` : baseUrl;
+    
+    console.log('Making request to:', url); // Debug log
+    
+    const response = await axios.get(url);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching civic events:', error);
+    res.status(500).json({ error: 'Failed to fetch civic events' });
+  }
+});
+
 app.get('/api/sync-logs', async (req, res) => {
   try {
     const { userId } = req.query;
