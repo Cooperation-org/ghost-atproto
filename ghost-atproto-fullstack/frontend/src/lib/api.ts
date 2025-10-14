@@ -129,6 +129,17 @@ class ApiClient {
   async health(): Promise<{ status: string; message: string }> {
     return this.request('/api/health');
   }
+
+  // Civic Events
+  async getCivicEvents(params?: { cursor?: string; zipcode?: string; organization_id?: string }): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (params?.cursor) queryParams.append('cursor', params.cursor);
+    if (params?.zipcode) queryParams.append('zipcode', params.zipcode);
+    if (params?.organization_id) queryParams.append('organization_id', params.organization_id);
+    
+    const queryString = queryParams.toString();
+    return this.request(`/api/civic-events${queryString ? `?${queryString}` : ''}`);
+  }
 }
 
 export const api = new ApiClient();

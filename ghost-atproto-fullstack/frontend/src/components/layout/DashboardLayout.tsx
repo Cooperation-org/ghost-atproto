@@ -15,6 +15,8 @@ import {
   Menu,
   MenuItem,
   Chip,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -22,10 +24,11 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import ArticleIcon from '@mui/icons-material/Article';
 import CloudIcon from '@mui/icons-material/Cloud';
+import CampaignIcon from '@mui/icons-material/Campaign';
 import { api } from '@/lib/api';
 import { User } from '@/lib/types';
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
+export function DashboardLayout({ children }: { readonly children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [stats, setStats] = useState<{
@@ -35,6 +38,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [currentTab, setCurrentTab] = useState('/dashboard');
+
+  useEffect(() => {
+    // Update currentTab based on current path
+    if (typeof window !== 'undefined') {
+      setCurrentTab(window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -54,6 +65,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
     loadData();
   }, [router]);
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
+    setCurrentTab(newValue);
+    router.push(newValue);
+  };
 
   const handleProfileClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -117,8 +133,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             anchorEl={anchorEl}
             open={Boolean(anchorEl)}
             onClose={handleProfileClose}
-            PaperProps={{
-              sx: { minWidth: 280, mt: 1 }
+            slotProps={{
+              paper: {
+                sx: { minWidth: 280, mt: 1 }
+              }
             }}
           >
             {/* User Info */}
@@ -210,13 +228,54 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </Toolbar>
       </AppBar>
       
+      {/* Navigation Tabs */}
+      <Box sx={{ 
+        bgcolor: 'white', 
+        borderBottom: 1, 
+        borderColor: 'divider',
+        position: 'fixed',
+        top: 64,
+        left: 0,
+        right: 0,
+        zIndex: 1100,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+      }}>
+        <Box sx={{ maxWidth: '1400px', mx: 'auto', px: 3 }}>
+          <Tabs 
+            value={currentTab} 
+            onChange={handleTabChange}
+            sx={{
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.95rem',
+                minHeight: 48,
+              }
+            }}
+          >
+            <Tab 
+              icon={<ArticleIcon />} 
+              iconPosition="start" 
+              label="Articles" 
+              value="/dashboard" 
+            />
+            <Tab 
+              icon={<CampaignIcon />} 
+              iconPosition="start" 
+              label="Civic Actions" 
+              value="/dashboard/civic-actions" 
+            />
+          </Tabs>
+        </Box>
+      </Box>
+      
       {/* Main Content - Full Width */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           p: 3,
-          pt: 10,
+          pt: 18, // Increased to account for both AppBar and Tabs
           maxWidth: '1400px',
           mx: 'auto',
         }}
