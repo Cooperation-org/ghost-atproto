@@ -953,7 +953,27 @@ app.get('/api/posts/:id', async (req, res) => {
 // Civic Events (Mobilize API Proxy)
 app.get('/api/civic-events', async (req, res) => {
   try {
-    const { cursor, zipcode, organization_id } = req.query;
+    const { 
+      cursor, 
+      zipcode, 
+      organization_id, 
+      event_type, 
+      event_types,
+      state, 
+      timeslot_start_after, 
+      timeslot_start_before,
+      timeslot_start,
+      timeslot_end,
+      is_virtual,
+      exclude_full,
+      max_dist,
+      updated_since,
+      visibility,
+      high_priority_only,
+      tag_id,
+      event_campaign_id,
+      approval_status
+    } = req.query;
     
     // Build query params - handle cursor properly
     const params = new URLSearchParams();
@@ -975,8 +995,46 @@ app.get('/api/civic-events', async (req, res) => {
         params.append('cursor', decodedCursor);
       }
     }
+    
+    // Basic filters
     if (zipcode) params.append('zipcode', zipcode as string);
     if (organization_id) params.append('organization_id', organization_id as string);
+    if (state) params.append('state', state as string);
+    if (updated_since) params.append('updated_since', updated_since as string);
+    if (visibility) params.append('visibility', visibility as string);
+    if (max_dist) params.append('max_dist', max_dist as string);
+    if (event_campaign_id) params.append('event_campaign_id', event_campaign_id as string);
+    
+    // Event type filters (support both single and multiple)
+    if (event_type) params.append('event_type', event_type as string);
+    if (event_types) {
+      // Handle multiple event types
+      const types = Array.isArray(event_types) ? event_types : [event_types];
+      types.forEach(type => params.append('event_types', type as string));
+    }
+    
+    // Boolean filters
+    if (is_virtual !== undefined) params.append('is_virtual', is_virtual as string);
+    if (exclude_full !== undefined) params.append('exclude_full', exclude_full as string);
+    if (high_priority_only !== undefined) params.append('high_priority_only', high_priority_only as string);
+    
+    // Date/time filters
+    if (timeslot_start_after) params.append('timeslot_start_after', timeslot_start_after as string);
+    if (timeslot_start_before) params.append('timeslot_start_before', timeslot_start_before as string);
+    if (timeslot_start) params.append('timeslot_start', timeslot_start as string);
+    if (timeslot_end) params.append('timeslot_end', timeslot_end as string);
+    
+    // Tag filters (support multiple)
+    if (tag_id) {
+      const tags = Array.isArray(tag_id) ? tag_id : [tag_id];
+      tags.forEach(tag => params.append('tag_id', tag as string));
+    }
+    
+    // Approval status filters (support multiple)
+    if (approval_status) {
+      const statuses = Array.isArray(approval_status) ? approval_status : [approval_status];
+      statuses.forEach(status => params.append('approval_status', status as string));
+    }
     
     const queryString = params.toString();
     const baseUrl = 'https://api.mobilize.us/v1/events';
