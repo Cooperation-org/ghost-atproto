@@ -45,8 +45,8 @@ model User {
   posts         Post[]
   syncLogs      SyncLog[]
   oauthSessions OAuthSession[]
-  // submittedCivicActions CivicAction[] @relation("SubmittedActions")
-  // reviewedCivicActions  CivicAction[] @relation("ReviewedActions")
+  submittedCivicActions CivicAction[] @relation("SubmittedActions")
+  reviewedCivicActions  CivicAction[] @relation("ReviewedActions")
 
   @@map("users")
 }
@@ -142,31 +142,31 @@ model Settings {
   @@map("settings")
 }
 
-// model CivicAction {
-//   id          String   @id @default(cuid())
-//   title       String
-//   description String   @db.Text
-//   eventType   String?  @map("event_type")
-//   location    String?
-//   eventDate   DateTime? @map("event_date")
-//   
-//   // Submission status
-//   status      String   @default("pending") // pending, approved, rejected
-//   isPinned    Boolean  @default(false) @map("is_pinned")
-//   
-//   // Review
-//   reviewedBy  String?  @map("reviewed_by")
-//   reviewer    User?    @relation("ReviewedActions", fields: [reviewedBy], references: [id])
-//   reviewedAt  DateTime? @map("reviewed_at")
-//   rejectionReason String? @db.Text @map("rejection_reason")
-//   
-//   // Metadata
-//   createdAt   DateTime @default(now())
-//   updatedAt   DateTime @updatedAt
-//   
-//   // Relations
-//   userId      String
-//   user        User     @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
-//   
-//   @@map("civic_actions")
-// }
+model CivicAction {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text
+  eventType   String?  @map("event_type")
+  location    String?
+  eventDate   DateTime? @map("event_date")
+  
+  // Submission status
+  status      String   @default("pending") // pending, approved, rejected
+  isPinned    Boolean  @default(false) @map("is_pinned")
+  
+  // Review
+  reviewedBy  String?  @map("reviewed_by")
+  reviewer    User?    @relation("ReviewedActions", fields: [reviewedBy], references: [id])
+  reviewedAt  DateTime? @map("reviewed_at")
+  rejectionReason String? @db.Text @map("rejection_reason")
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  userId      String
+  user        User     @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("civic_actions")
+}
