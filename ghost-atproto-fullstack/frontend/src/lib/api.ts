@@ -167,7 +167,39 @@ class ApiClient {
     tag_id?: string[];
     event_campaign_id?: string;
     approval_status?: string[];
-  }): Promise<any> {
+  }): Promise<{
+    count: number;
+    next: string | null;
+    previous: string | null;
+    data: Array<{
+      id: number;
+      title: string;
+      summary: string;
+      description: string;
+      event_type?: string | null;
+      featured_image_url?: string;
+      timeslots: Array<{
+        start_date: number;
+        end_date: number;
+        id: number;
+        is_full: boolean;
+      }>;
+      sponsor: {
+        name: string;
+        logo_url?: string;
+        org_type: string;
+        state?: string;
+      };
+      location?: {
+        venue?: string;
+        locality?: string;
+        region?: string;
+      };
+      browser_url: string;
+      is_virtual: boolean;
+      timezone: string;
+    }>;
+  }> {
     const queryParams = new URLSearchParams();
     
     // Basic filters

@@ -162,9 +162,9 @@ export default function ArticlePage() {
                     <Typography variant="body2" fontWeight={600}>
                       {post.user.name || post.user.email.split('@')[0]}
                     </Typography>
-                    {post.user.atprotoHandle && (
+                    {post.user.blueskyHandle && (
                       <Typography variant="caption" color="text.secondary">
-                        @{post.user.atprotoHandle}
+                        @{post.user.blueskyHandle}
                       </Typography>
                     )}
                   </Box>
