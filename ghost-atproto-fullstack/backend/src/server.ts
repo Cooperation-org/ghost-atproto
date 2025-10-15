@@ -10,6 +10,7 @@ import path from 'path';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import atprotoRoutes from './routes/atproto';
 import wizardRoutes from './routes/wizard';
 import axios from 'axios';
@@ -538,14 +539,21 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // For now, simple email-based login (will add proper password hashing later)
-    let user = await prisma.user.findUnique({ where: { email } });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user by email
+    const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      // Auto-create user on first login
-      user = await prisma.user.create({
-        data: { email, name: email.split('@')[0] }
-      });
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     // Generate JWT token
@@ -564,7 +572,8 @@ app.post('/api/auth/login', async (req, res) => {
         email: user.email,
         name: user.name,
         blueskyHandle: user.blueskyHandle,
-        ghostUrl: user.ghostUrl
+        ghostUrl: user.ghostUrl,
+        role: user.role
       },
       token
     });
@@ -587,6 +596,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         id: true,
         email: true,
         name: true,
+        role: true,
         blueskyHandle: true,
         blueskyPassword: true,
         ghostUrl: true,
@@ -603,6 +613,75 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+// Signup route: create user with chosen role
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { email, name, password, role } = req.body as { 
+      email?: string; 
+      name?: string; 
+      password?: string;
+      role?: 'USER' | 'AUTHOR' | 'ADMIN' 
+    };
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Ensure email unique
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+
+    // Validate role - ADMIN cannot be created via signup
+    const normalizedRole = (role || 'USER').toUpperCase();
+    if (!['USER', 'AUTHOR'].includes(normalizedRole)) {
+      return res.status(400).json({ error: 'Invalid role. Use USER or AUTHOR.' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: name || email.split('@')[0],
+        password: hashedPassword,
+        role: normalizedRole as any,
+      }
+    });
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Set cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        blueskyHandle: user.blueskyHandle,
+        ghostUrl: user.ghostUrl,
+        role: user.role
+      },
+      token
+    });
+  } catch (error) {
+    console.error('Signup error:', error);
+    res.status(500).json({ error: 'Signup failed' });
   }
 });
 
@@ -827,16 +906,24 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
-    const { email, name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
+    const { email, name, password, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
     }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
       data: {
         email,
         name: name || null,
+        password: hashedPassword,
         blueskyHandle: blueskyHandle || null,
         blueskyPassword: blueskyPassword || null,
         ghostUrl: ghostUrl || null,
@@ -1063,6 +1150,206 @@ app.get('/api/sync-logs', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch sync logs' });
   }
 });
+
+// Civic Actions Routes
+// Create a civic action submission
+/* app.post('/api/civic-actions', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { title, description, eventType, location, eventDate } = req.body;
+
+    if (!title || !description) {
+      return res.status(400).json({ error: 'Title and description are required' });
+    }
+
+    const civicAction = await prisma.civicAction.create({
+      data: {
+        title,
+        description,
+        eventType,
+        location,
+        eventDate: eventDate ? new Date(eventDate) : null,
+        userId,
+        status: 'pending',
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          }
+        }
+      }
+    });
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Create civic action error:', error);
+    res.status(500).json({ error: 'Failed to create civic action' });
+  }
+}); */
+
+// Get civic actions (admins see all, users see only approved/pinned)
+/* app.get('/api/civic-actions', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    let whereClause = {};
+    
+    // Admins see all civic actions
+    if (user.role === 'ADMIN') {
+      // Optionally filter by status
+      const { status } = req.query;
+      if (status) {
+        whereClause = { status: String(status) };
+      }
+    } else {
+      // Regular users only see approved actions
+      whereClause = { status: 'approved' };
+    }
+
+    const civicActions = await prisma.civicAction.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          }
+        },
+        reviewer: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          }
+        }
+      },
+      orderBy: [
+        { isPinned: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
+
+    res.json(civicActions);
+  } catch (error) {
+    console.error('Get civic actions error:', error);
+    res.status(500).json({ error: 'Failed to fetch civic actions' });
+  }
+}); */
+
+// Approve civic action (admin only)
+/* app.post('/api/civic-actions/:id/approve', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+    const { pinned } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const civicAction = await prisma.civicAction.update({
+      where: { id },
+      data: {
+        status: 'approved',
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+        isPinned: pinned || false,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          }
+        }
+      }
+    });
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Approve civic action error:', error);
+    res.status(500).json({ error: 'Failed to approve civic action' });
+  }
+}); */
+
+// Reject civic action (admin only)
+/* app.post('/api/civic-actions/:id/reject', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const civicAction = await prisma.civicAction.update({
+      where: { id },
+      data: {
+        status: 'rejected',
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+        rejectionReason: reason,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          }
+        }
+      }
+    });
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Reject civic action error:', error);
+    res.status(500).json({ error: 'Failed to reject civic action' });
+  }
+}); */
+
+// Toggle pin status (admin only)
+/* app.post('/api/civic-actions/:id/toggle-pin', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const currentAction = await prisma.civicAction.findUnique({ where: { id } });
+    if (!currentAction) {
+      return res.status(404).json({ error: 'Civic action not found' });
+    }
+
+    const civicAction = await prisma.civicAction.update({
+      where: { id },
+      data: {
+        isPinned: !currentAction.isPinned,
+      }
+    });
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Toggle pin error:', error);
+    res.status(500).json({ error: 'Failed to toggle pin status' });
+  }
+}); */
 
 // Mount all routes on /bridge as well (for nginx proxy)
 const bridgeApp = express.Router();

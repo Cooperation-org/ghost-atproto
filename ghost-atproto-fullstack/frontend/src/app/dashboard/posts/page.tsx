@@ -41,7 +41,7 @@ export default function PostsPage() {
     try {
       setLoading(true);
       setError(null);
-      const postsData = await api.getPosts();
+      const postsData = await api.getAllPosts();
       setPosts(postsData);
     } catch (err) {
       setError('Failed to load posts');
@@ -115,9 +115,14 @@ export default function PostsPage() {
   return (
     <DashboardLayout>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">
-          Posts
-        </Typography>
+        <Box>
+          <Typography variant="h4">
+            All Posts
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Articles synced from Ghost to Bluesky by all authors
+          </Typography>
+        </Box>
         <Tooltip title="Refresh posts">
           <IconButton onClick={loadPosts} disabled={loading}>
             <RefreshIcon />
@@ -137,11 +142,11 @@ export default function PostsPage() {
             <TableHead>
               <TableRow>
                 <TableCell>Title</TableCell>
+                <TableCell>Author</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Ghost URL</TableCell>
                 <TableCell>Bluesky Status</TableCell>
                 <TableCell>Published</TableCell>
-                <TableCell>Updated</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -165,6 +170,18 @@ export default function PostsPage() {
                         <Typography variant="body2" color="textSecondary">
                           {truncateText(post.content.replace(/<[^>]*>/g, ''))}
                         </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box>
+                        <Typography variant="body2" fontWeight="medium">
+                          {post.user?.name || 'Unknown Author'}
+                        </Typography>
+                        {post.user?.blueskyHandle && (
+                          <Typography variant="caption" color="primary">
+                            @{post.user.blueskyHandle}
+                          </Typography>
+                        )}
                       </Box>
                     </TableCell>
                     <TableCell>
@@ -208,11 +225,6 @@ export default function PostsPage() {
                     <TableCell>
                       <Typography variant="body2">
                         {formatDate(post.publishedAt)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {formatDate(post.updatedAt)}
                       </Typography>
                     </TableCell>
                     <TableCell>

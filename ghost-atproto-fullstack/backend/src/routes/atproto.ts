@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { publishToBluesky } from '../lib/atproto';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -111,8 +112,13 @@ router.post('/publish', async (req, res) => {
           const fallbackUser = await prisma.user.findFirst();
           userId = fallbackUser?.id;
           if (!userId) {
+            // Create fallback user with hashed password
+            const hashedPassword = await bcrypt.hash(`fallback-${Date.now()}`, 10);
             const newUser = await prisma.user.create({
-              data: { email: `error-log-user-${Date.now()}@local` }
+              data: { 
+                email: `error-log-user-${Date.now()}@local`,
+                password: hashedPassword
+              }
             });
             userId = newUser.id;
           }

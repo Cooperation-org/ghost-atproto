@@ -38,12 +38,15 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [currentTab, setCurrentTab] = useState('/dashboard');
+  const [currentTab, setCurrentTab] = useState<string | false>('/dashboard');
 
   useEffect(() => {
     // Update currentTab based on current path
     if (typeof window !== 'undefined') {
-      setCurrentTab(window.location.pathname);
+      const path = window.location.pathname;
+      const tabs = ['/dashboard', '/dashboard/civic-actions'];
+      const matched = tabs.find(t => path === t || path.startsWith(t + '/')) || false;
+      setCurrentTab(matched);
     }
   }, []);
 

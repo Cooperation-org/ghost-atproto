@@ -46,10 +46,24 @@ class ApiClient {
   }
 
   // Auth
-  async login(email: string, password?: string): Promise<LoginResponse> {
+  async login(email: string, password: string): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    });
+
+    this.token = data.token;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', data.token);
+    }
+
+    return data;
+  }
+
+  async signup(email: string, password: string, role: 'USER' | 'AUTHOR' | 'ADMIN', name?: string): Promise<LoginResponse> {
+    const data = await this.request<LoginResponse>('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, role, name }),
     });
 
     this.token = data.token;
@@ -130,7 +144,9 @@ class ApiClient {
     return this.request('/api/health');
   }
 
-  // Civic Events
+  // Civic Actions removed
+
+  // Civic Events (Mobilize API)
   async getCivicEvents(params?: { 
     cursor?: string; 
     zipcode?: string; 

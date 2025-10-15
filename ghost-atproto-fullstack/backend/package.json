@@ -16,6 +16,7 @@
     "@atproto/oauth-client-node": "^0.3.8",
     "@prisma/client": "^6.17.0",
     "axios": "^1.12.2",
+    "bcryptjs": "^3.0.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -26,6 +27,7 @@
     "mysql2": "^3.15.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.13",
     "@types/express": "^5.0.3",

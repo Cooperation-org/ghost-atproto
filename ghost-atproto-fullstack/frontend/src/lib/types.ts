@@ -2,6 +2,7 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
+  role?: 'USER' | 'AUTHOR' | 'ADMIN';
   blueskyHandle: string | null;
   blueskyPassword: string | null;
   ghostUrl: string | null;
