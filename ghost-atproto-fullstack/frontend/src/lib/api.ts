@@ -131,11 +131,65 @@ class ApiClient {
   }
 
   // Civic Events
-  async getCivicEvents(params?: { cursor?: string; zipcode?: string; organization_id?: string }): Promise<any> {
+  async getCivicEvents(params?: { 
+    cursor?: string; 
+    zipcode?: string; 
+    organization_id?: string;
+    event_type?: string;
+    event_types?: string[];
+    state?: string;
+    timeslot_start_after?: string;
+    timeslot_start_before?: string;
+    timeslot_start?: string;
+    timeslot_end?: string;
+    is_virtual?: boolean;
+    exclude_full?: boolean;
+    max_dist?: number;
+    updated_since?: string;
+    visibility?: string;
+    high_priority_only?: boolean;
+    tag_id?: string[];
+    event_campaign_id?: string;
+    approval_status?: string[];
+  }): Promise<any> {
     const queryParams = new URLSearchParams();
+    
+    // Basic filters
     if (params?.cursor) queryParams.append('cursor', params.cursor);
     if (params?.zipcode) queryParams.append('zipcode', params.zipcode);
     if (params?.organization_id) queryParams.append('organization_id', params.organization_id);
+    if (params?.state) queryParams.append('state', params.state);
+    if (params?.updated_since) queryParams.append('updated_since', params.updated_since);
+    if (params?.visibility) queryParams.append('visibility', params.visibility);
+    if (params?.max_dist) queryParams.append('max_dist', params.max_dist.toString());
+    if (params?.event_campaign_id) queryParams.append('event_campaign_id', params.event_campaign_id);
+    
+    // Event type filters
+    if (params?.event_type) queryParams.append('event_type', params.event_type);
+    if (params?.event_types) {
+      params.event_types.forEach(type => queryParams.append('event_types', type));
+    }
+    
+    // Boolean filters
+    if (params?.is_virtual !== undefined) queryParams.append('is_virtual', params.is_virtual.toString());
+    if (params?.exclude_full !== undefined) queryParams.append('exclude_full', params.exclude_full.toString());
+    if (params?.high_priority_only !== undefined) queryParams.append('high_priority_only', params.high_priority_only.toString());
+    
+    // Date/time filters
+    if (params?.timeslot_start_after) queryParams.append('timeslot_start_after', params.timeslot_start_after);
+    if (params?.timeslot_start_before) queryParams.append('timeslot_start_before', params.timeslot_start_before);
+    if (params?.timeslot_start) queryParams.append('timeslot_start', params.timeslot_start);
+    if (params?.timeslot_end) queryParams.append('timeslot_end', params.timeslot_end);
+    
+    // Tag filters
+    if (params?.tag_id) {
+      params.tag_id.forEach(tag => queryParams.append('tag_id', tag));
+    }
+    
+    // Approval status filters
+    if (params?.approval_status) {
+      params.approval_status.forEach(status => queryParams.append('approval_status', status));
+    }
     
     const queryString = queryParams.toString();
     return this.request(`/api/civic-events${queryString ? `?${queryString}` : ''}`);

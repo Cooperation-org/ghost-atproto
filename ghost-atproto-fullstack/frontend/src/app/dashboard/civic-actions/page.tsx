@@ -76,8 +76,17 @@ export default function CivicActionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [sortBy, setSortBy] = useState('date');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const [allEvents, setAllEvents] = useState<CivicEvent[]>([]);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  
+  // Advanced filters
+  const [zipcodeFilter, setZipcodeFilter] = useState('');
+  const [dateRangeFilter, setDateRangeFilter] = useState('');
+  const [excludeFullFilter, setExcludeFullFilter] = useState(false);
+  const [highPriorityFilter, setHighPriorityFilter] = useState(false);
 
   const loadEvents = useCallback(async (cursor?: string, append = false) => {
     try {
@@ -90,14 +99,14 @@ export default function CivicActionsPage() {
       const response: CivicEventsResponse = await api.getCivicEvents({ cursor });
       
       if (append) {
-        setEvents(prev => {
+        setAllEvents(prev => {
           // Filter out duplicate events by ID
           const existingIds = new Set(prev.map(event => event.id));
           const newEvents = response.data.filter(event => !existingIds.has(event.id));
           return [...prev, ...newEvents];
         });
       } else {
-        setEvents(response.data);
+        setAllEvents(response.data);
       }
       
       setNextCursor(response.next);
@@ -116,9 +125,99 @@ export default function CivicActionsPage() {
     }
   }, [nextCursor, loadingMore, loadEvents]);
 
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Filter and search effect
+  useEffect(() => {
+    let filteredEvents = [...allEvents];
+
+    // Apply search filter
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase();
+      filteredEvents = filteredEvents.filter(event => 
+        event.title.toLowerCase().includes(query) ||
+        event.summary.toLowerCase().includes(query) ||
+        event.description.toLowerCase().includes(query) ||
+        event.sponsor.name.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply category filter
+    if (categoryFilter) {
+      filteredEvents = filteredEvents.filter(event => event.event_type === categoryFilter);
+    }
+
+    // Apply location filter
+    if (statusFilter === 'virtual') {
+      filteredEvents = filteredEvents.filter(event => event.is_virtual);
+    } else if (statusFilter === 'in-person') {
+      filteredEvents = filteredEvents.filter(event => !event.is_virtual);
+    }
+
+    // Apply date range filter
+    if (dateRangeFilter) {
+      const now = Math.floor(Date.now() / 1000);
+      filteredEvents = filteredEvents.filter(event => {
+        if (!event.timeslots || event.timeslots.length === 0) return false;
+        const eventStart = event.timeslots[0].start_date;
+        
+        switch (dateRangeFilter) {
+          case 'today': {
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            const todayEnd = new Date();
+            todayEnd.setHours(23, 59, 59, 999);
+            return eventStart >= Math.floor(todayStart.getTime() / 1000) && 
+                   eventStart <= Math.floor(todayEnd.getTime() / 1000);
+          }
+          case 'this-week': {
+            const weekStart = new Date();
+            weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+            weekStart.setHours(0, 0, 0, 0);
+            return eventStart >= Math.floor(weekStart.getTime() / 1000);
+          }
+          case 'this-month': {
+            const monthStart = new Date();
+            monthStart.setDate(1);
+            monthStart.setHours(0, 0, 0, 0);
+            return eventStart >= Math.floor(monthStart.getTime() / 1000);
+          }
+          case 'upcoming':
+            return eventStart >= now;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply sorting
+    filteredEvents.sort((a, b) => {
+      switch (sortBy) {
+        case 'title':
+          return a.title.localeCompare(b.title);
+        case 'type':
+          return (a.event_type || '').localeCompare(b.event_type || '');
+        case 'date':
+        default:
+          const aDate = a.timeslots?.[0]?.start_date || 0;
+          const bDate = b.timeslots?.[0]?.start_date || 0;
+          return aDate - bDate;
+      }
+    });
+
+    setEvents(filteredEvents);
+  }, [allEvents, debouncedSearchQuery, categoryFilter, statusFilter, dateRangeFilter, sortBy]);
+
+  // Load initial events
   useEffect(() => {
     loadEvents();
-  }, [loadEvents]);
+  }, []);
 
   // Infinite scroll effect
   useEffect(() => {
@@ -270,17 +369,16 @@ export default function CivicActionsPage() {
               minWidth: { xs: 'calc(50% - 8px)', sm: 120 },
               width: { xs: 'auto', sm: 'auto' },
             }}>
-              <InputLabel>Status</InputLabel>
+              <InputLabel>Location</InputLabel>
               <Select
                 value={statusFilter}
-                label="Status"
+                label="Location"
                 onChange={(e) => setStatusFilter(e.target.value)}
                 sx={{ borderRadius: 2 }}
               >
-                <MenuItem value="">All Status</MenuItem>
-                <MenuItem value="approved">Approved</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="rejected">Rejected</MenuItem>
+                <MenuItem value="">All Locations</MenuItem>
+                <MenuItem value="virtual">Virtual Events</MenuItem>
+                <MenuItem value="in-person">In-Person Events</MenuItem>
               </Select>
             </FormControl>
 
@@ -291,8 +389,9 @@ export default function CivicActionsPage() {
             }}>
               <InputLabel>Sort By</InputLabel>
               <Select
-                value="date"
+                value={sortBy}
                 label="Sort By"
+                onChange={(e) => setSortBy(e.target.value)}
                 sx={{ borderRadius: 2 }}
               >
                 <MenuItem value="date">Date</MenuItem>
@@ -301,6 +400,127 @@ export default function CivicActionsPage() {
               </Select>
             </FormControl>
           </Box>
+
+          {/* Advanced Filters Row */}
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 2, 
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            width: '100%',
+            mt: 2,
+            pt: 2,
+            borderTop: '1px solid',
+            borderColor: 'grey.200',
+          }}>
+            {/* Zipcode Filter */}
+            <TextField
+              placeholder="Enter zipcode for location-based results"
+              value={zipcodeFilter}
+              onChange={(e) => setZipcodeFilter(e.target.value)}
+              sx={{
+                width: { xs: '100%', sm: 250 },
+                minWidth: { xs: 'auto', sm: 250 },
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                },
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LocationOnIcon sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }
+              }}
+            />
+
+            {/* Date Range Filter */}
+            <FormControl sx={{ 
+              minWidth: { xs: 'calc(50% - 8px)', sm: 150 },
+              width: { xs: 'auto', sm: 'auto' },
+            }}>
+              <InputLabel>Date Range</InputLabel>
+              <Select
+                value={dateRangeFilter}
+                label="Date Range"
+                onChange={(e) => setDateRangeFilter(e.target.value)}
+                sx={{ borderRadius: 2 }}
+              >
+                <MenuItem value="">All Dates</MenuItem>
+                <MenuItem value="today">Today</MenuItem>
+                <MenuItem value="this-week">This Week</MenuItem>
+                <MenuItem value="this-month">This Month</MenuItem>
+                <MenuItem value="upcoming">Upcoming Only</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Advanced Options */}
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 1, 
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}>
+              <Button
+                variant={excludeFullFilter ? "contained" : "outlined"}
+                size="small"
+                onClick={() => setExcludeFullFilter(!excludeFullFilter)}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: 2,
+                  px: 2,
+                  py: 0.5,
+                  fontSize: '0.8rem',
+                }}
+              >
+                Exclude Full Events
+              </Button>
+              
+              <Button
+                variant={highPriorityFilter ? "contained" : "outlined"}
+                size="small"
+                onClick={() => setHighPriorityFilter(!highPriorityFilter)}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: 2,
+                  px: 2,
+                  py: 0.5,
+                  fontSize: '0.8rem',
+                }}
+              >
+                High Priority Only
+              </Button>
+            </Box>
+          </Box>
+
+          {/* Clear Filters Button */}
+          <Button
+            variant="outlined"
+            onClick={() => {
+              setSearchQuery('');
+              setCategoryFilter('');
+              setStatusFilter('');
+              setSortBy('date');
+              setZipcodeFilter('');
+              setDateRangeFilter('');
+              setExcludeFullFilter(false);
+              setHighPriorityFilter(false);
+            }}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+              py: 1.5,
+              fontWeight: 600,
+              ml: { xs: 0, sm: 1 },
+              width: { xs: '100%', sm: 'auto' },
+              mt: { xs: 1, sm: 0 },
+            }}
+          >
+            Clear Filters
+          </Button>
 
           {/* Create New Action Button */}
           <Button
@@ -311,7 +531,7 @@ export default function CivicActionsPage() {
               px: 3,
               py: 1.5,
               fontWeight: 600,
-              ml: { xs: 0, sm: 'auto' },
+              ml: { xs: 0, sm: 1 },
               width: { xs: '100%', sm: 'auto' },
               mt: { xs: 1, sm: 0 },
             }}
@@ -320,6 +540,21 @@ export default function CivicActionsPage() {
           </Button>
         </Box>
       </Paper>
+
+      {/* Results Counter */}
+      {events.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="body2" color="text.secondary">
+            Showing {events.length} event{events.length !== 1 ? 's' : ''}
+            {(searchQuery || categoryFilter || statusFilter || zipcodeFilter || dateRangeFilter || excludeFullFilter || highPriorityFilter) && (
+              <span> (filtered from {allEvents.length} total)</span>
+            )}
+            {zipcodeFilter && (
+              <span> • Sorted by distance from {zipcodeFilter}</span>
+            )}
+          </Typography>
+        </Box>
+      )}
 
       {/* Events Grid */}
       {events.length === 0 && !loading ? (
@@ -349,10 +584,13 @@ export default function CivicActionsPage() {
             <CampaignIcon sx={{ fontSize: 40, color: 'primary.main' }} />
           </Box>
           <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
-            No Events Available
+            {searchQuery || categoryFilter || statusFilter || zipcodeFilter || dateRangeFilter || excludeFullFilter || highPriorityFilter ? 'No Events Match Your Filters' : 'No Events Available'}
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Check back soon for civic engagement opportunities
+            {searchQuery || categoryFilter || statusFilter || zipcodeFilter || dateRangeFilter || excludeFullFilter || highPriorityFilter 
+              ? 'Try adjusting your search criteria or clear filters to see more events'
+              : 'Check back soon for civic engagement opportunities'
+            }
           </Typography>
         </Paper>
       ) : (
