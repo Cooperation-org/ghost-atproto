@@ -217,7 +217,7 @@ export default function CivicActionsPage() {
   // Load initial events
   useEffect(() => {
     loadEvents();
-  }, []);
+  }, [loadEvents]);
 
   // Infinite scroll effect
   useEffect(() => {
