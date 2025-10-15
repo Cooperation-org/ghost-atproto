@@ -10,12 +10,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  USER
+  AUTHOR
+  ADMIN
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
+  password  String   // Hashed password
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Authorization
+  role Role @default(USER)
 
   // NEW: Add these Bluesky fields
   blueskyHandle      String? @map("bluesky_handle")
@@ -35,6 +45,8 @@ model User {
   posts         Post[]
   syncLogs      SyncLog[]
   oauthSessions OAuthSession[]
+  submittedCivicActions CivicAction[] @relation("SubmittedActions")
+  reviewedCivicActions  CivicAction[] @relation("ReviewedActions")
 
   @@map("users")
 }
@@ -128,4 +140,33 @@ model Settings {
   updatedAt DateTime @updatedAt
 
   @@map("settings")
+}
+
+model CivicAction {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text
+  eventType   String?  @map("event_type")
+  location    String?
+  eventDate   DateTime? @map("event_date")
+  
+  // Submission status
+  status      String   @default("pending") // pending, approved, rejected
+  isPinned    Boolean  @default(false) @map("is_pinned")
+  
+  // Review
+  reviewedBy  String?  @map("reviewed_by")
+  reviewer    User?    @relation("ReviewedActions", fields: [reviewedBy], references: [id])
+  reviewedAt  DateTime? @map("reviewed_at")
+  rejectionReason String? @db.Text @map("rejection_reason")
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  userId      String
+  user        User     @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("civic_actions")
 }

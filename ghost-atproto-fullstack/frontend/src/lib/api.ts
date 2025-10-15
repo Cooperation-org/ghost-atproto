@@ -46,10 +46,24 @@ class ApiClient {
   }
 
   // Auth
-  async login(email: string, password?: string): Promise<LoginResponse> {
+  async login(email: string, password: string): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    });
+
+    this.token = data.token;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', data.token);
+    }
+
+    return data;
+  }
+
+  async signup(email: string, password: string, role: 'USER' | 'AUTHOR' | 'ADMIN', name?: string): Promise<LoginResponse> {
+    const data = await this.request<LoginResponse>('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, role, name }),
     });
 
     this.token = data.token;
@@ -130,7 +144,46 @@ class ApiClient {
     return this.request('/api/health');
   }
 
-  // Civic Events
+  // Civic Actions (user-submitted)
+  async getCivicActions(status?: string): Promise<any[]> {
+    const queryString = status ? `?status=${status}` : '';
+    return this.request(`/api/civic-actions${queryString}`);
+  }
+
+  async createCivicAction(data: {
+    title: string;
+    description: string;
+    eventType?: string;
+    location?: string;
+    eventDate?: string;
+  }): Promise<any> {
+    return this.request('/api/civic-actions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async approveCivicAction(id: string, pinned: boolean = false): Promise<any> {
+    return this.request(`/api/civic-actions/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ pinned }),
+    });
+  }
+
+  async rejectCivicAction(id: string, reason?: string): Promise<any> {
+    return this.request(`/api/civic-actions/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async togglePinCivicAction(id: string): Promise<any> {
+    return this.request(`/api/civic-actions/${id}/toggle-pin`, {
+      method: 'POST',
+    });
+  }
+
+  // Civic Events (Mobilize API)
   async getCivicEvents(params?: { 
     cursor?: string; 
     zipcode?: string; 

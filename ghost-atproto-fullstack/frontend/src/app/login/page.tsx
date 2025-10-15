@@ -10,13 +10,16 @@ import {
   Button,
   Typography,
   Alert,
+  Divider,
+  Stack,
 } from '@mui/material';
+import NextLink from 'next/link';
 import { api } from '@/lib/api';
-import { wizardApi } from '@/lib/wizard-api';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,23 +29,22 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await api.login(email);
-      
-      // Check if user needs to complete wizard
-      try {
-        const status = await wizardApi.getStatus();
-        if (!status.isComplete) {
-          router.push('/wizard');
-          return;
-        }
-      } catch (statusErr) {
-        // If status check fails, continue to dashboard
-        console.error('Failed to check wizard status:', statusErr);
+      const res = await api.login(email, password);
+
+      const role = res.user.role || 'USER';
+      if (role === 'AUTHOR') {
+        router.push('/wizard');
+        return;
       }
-      
+      if (role === 'ADMIN') {
+        router.push('/dashboard/civic-actions');
+        return;
+      }
+
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      const msg = err instanceof Error ? err.message : 'Login failed';
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -56,18 +58,19 @@ export default function LoginPage() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          py: 4,
         }}
       >
-        <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
-          <Typography variant="h4" component="h1" gutterBottom align="center">
-            Ghost to Bluesky Bridge
+        <Paper elevation={3} sx={{ p: 5, width: '100%', borderRadius: 2 }}>
+          <Typography variant="h3" component="h1" gutterBottom align="center" fontWeight="bold">
+            Welcome Back
           </Typography>
-          <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
-            Sign in with your email to manage your Ghost and Bluesky integration
+          <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 4 }}>
+            Sign in to manage your Ghost and Bluesky integration
           </Typography>
 
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 3 }}>
               {error}
             </Alert>
           )}
@@ -85,21 +88,52 @@ export default function LoginPage() {
               disabled={loading}
             />
 
+            <TextField
+              fullWidth
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              margin="normal"
+              required
+              disabled={loading}
+              sx={{ mb: 2 }}
+            />
+
             <Button
               type="submit"
               fullWidth
               variant="contained"
               size="large"
               disabled={loading}
-              sx={{ mt: 3 }}
+              sx={{ mt: 2, py: 1.5, fontSize: '1.1rem' }}
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
 
-          <Typography variant="caption" color="text.secondary" align="center" display="block" sx={{ mt: 3 }}>
-            New users are automatically created on first login
-          </Typography>
+          <Divider sx={{ my: 3 }}>
+            <Typography variant="body2" color="text.secondary">
+              OR
+            </Typography>
+          </Divider>
+
+          <Button
+            component={NextLink}
+            href="/signup"
+            fullWidth
+            variant="outlined"
+            size="large"
+            sx={{ py: 1.5, fontSize: '1.1rem' }}
+          >
+            Create New Account
+          </Button>
+
+          <Stack spacing={1} sx={{ mt: 3, textAlign: 'center' }}>
+            <Typography variant="caption" color="text.secondary">
+              Choose your role during signup: Author or Regular User
+            </Typography>
+          </Stack>
         </Paper>
       </Box>
     </Container>
