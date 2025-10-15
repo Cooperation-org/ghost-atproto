@@ -1153,7 +1153,7 @@ app.get('/api/sync-logs', async (req, res) => {
 
 // Civic Actions Routes
 // Create a civic action submission
-app.post('/api/civic-actions', authenticateToken, async (req, res) => {
+/* app.post('/api/civic-actions', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const { title, description, eventType, location, eventDate } = req.body;
@@ -1188,10 +1188,10 @@ app.post('/api/civic-actions', authenticateToken, async (req, res) => {
     console.error('Create civic action error:', error);
     res.status(500).json({ error: 'Failed to create civic action' });
   }
-});
+}); */
 
 // Get civic actions (admins see all, users see only approved/pinned)
-app.get('/api/civic-actions', authenticateToken, async (req, res) => {
+/* app.get('/api/civic-actions', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -1243,10 +1243,10 @@ app.get('/api/civic-actions', authenticateToken, async (req, res) => {
     console.error('Get civic actions error:', error);
     res.status(500).json({ error: 'Failed to fetch civic actions' });
   }
-});
+}); */
 
 // Approve civic action (admin only)
-app.post('/api/civic-actions/:id/approve', authenticateToken, async (req, res) => {
+/* app.post('/api/civic-actions/:id/approve', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const { id } = req.params;
@@ -1281,10 +1281,10 @@ app.post('/api/civic-actions/:id/approve', authenticateToken, async (req, res) =
     console.error('Approve civic action error:', error);
     res.status(500).json({ error: 'Failed to approve civic action' });
   }
-});
+}); */
 
 // Reject civic action (admin only)
-app.post('/api/civic-actions/:id/reject', authenticateToken, async (req, res) => {
+/* app.post('/api/civic-actions/:id/reject', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const { id } = req.params;
@@ -1319,10 +1319,10 @@ app.post('/api/civic-actions/:id/reject', authenticateToken, async (req, res) =>
     console.error('Reject civic action error:', error);
     res.status(500).json({ error: 'Failed to reject civic action' });
   }
-});
+}); */
 
 // Toggle pin status (admin only)
-app.post('/api/civic-actions/:id/toggle-pin', authenticateToken, async (req, res) => {
+/* app.post('/api/civic-actions/:id/toggle-pin', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const { id } = req.params;
@@ -1349,7 +1349,7 @@ app.post('/api/civic-actions/:id/toggle-pin', authenticateToken, async (req, res
     console.error('Toggle pin error:', error);
     res.status(500).json({ error: 'Failed to toggle pin status' });
   }
-});
+}); */
 
 // Mount all routes on /bridge as well (for nginx proxy)
 const bridgeApp = express.Router();

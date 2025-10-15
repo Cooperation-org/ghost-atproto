@@ -144,44 +144,7 @@ class ApiClient {
     return this.request('/api/health');
   }
 
-  // Civic Actions (user-submitted)
-  async getCivicActions(status?: string): Promise<any[]> {
-    const queryString = status ? `?status=${status}` : '';
-    return this.request(`/api/civic-actions${queryString}`);
-  }
-
-  async createCivicAction(data: {
-    title: string;
-    description: string;
-    eventType?: string;
-    location?: string;
-    eventDate?: string;
-  }): Promise<any> {
-    return this.request('/api/civic-actions', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async approveCivicAction(id: string, pinned: boolean = false): Promise<any> {
-    return this.request(`/api/civic-actions/${id}/approve`, {
-      method: 'POST',
-      body: JSON.stringify({ pinned }),
-    });
-  }
-
-  async rejectCivicAction(id: string, reason?: string): Promise<any> {
-    return this.request(`/api/civic-actions/${id}/reject`, {
-      method: 'POST',
-      body: JSON.stringify({ reason }),
-    });
-  }
-
-  async togglePinCivicAction(id: string): Promise<any> {
-    return this.request(`/api/civic-actions/${id}/toggle-pin`, {
-      method: 'POST',
-    });
-  }
+  // Civic Actions removed
 
   // Civic Events (Mobilize API)
   async getCivicEvents(params?: { 
