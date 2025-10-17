@@ -1,5 +1,16 @@
 import { User, Post, SyncLog, LoginResponse, ApiError } from './types';
 
+export interface CivicActionDto {
+  id: string;
+  title: string;
+  status: string;
+  location?: string | null;
+  description?: string | null;
+  eventType?: string | null;
+  eventDate?: string | null;
+  imageUrl?: string | null;
+}
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 class ApiClient {
@@ -144,7 +155,63 @@ class ApiClient {
     return this.request('/api/health');
   }
 
-  // Civic Actions removed
+  // Civic Actions (user-submitted)
+  async getCivicActions(status?: string): Promise<CivicActionDto[]> {
+    const queryString = status ? `?status=${status}` : '';
+    return this.request<CivicActionDto[]>(`/api/civic-actions${queryString}`);
+  }
+
+  async getMyCivicActions(): Promise<CivicActionDto[]> {
+    return this.request<CivicActionDto[]>('/api/civic-actions/mine');
+  }
+
+  async createCivicAction(data: {
+    title: string;
+    description: string;
+    eventType?: string;
+    location?: string;
+    eventDate?: string;
+    imageUrl?: string;
+  }): Promise<CivicActionDto> {
+    return this.request<CivicActionDto>('/api/civic-actions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async approveCivicAction(id: string, pinned: boolean = false): Promise<CivicActionDto> {
+    return this.request<CivicActionDto>(`/api/civic-actions/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ pinned }),
+    });
+  }
+
+  async rejectCivicAction(id: string, reason?: string): Promise<CivicActionDto> {
+    return this.request<CivicActionDto>(`/api/civic-actions/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async togglePinCivicAction(id: string): Promise<CivicActionDto> {
+    return this.request<CivicActionDto>(`/api/civic-actions/${id}/toggle-pin`, {
+      method: 'POST',
+    });
+  }
+
+  async updateCivicAction(id: string, data: {
+    title?: string;
+    description?: string;
+    eventType?: string;
+    location?: string;
+    eventDate?: string;
+    imageUrl?: string;
+  }): Promise<CivicActionDto> {
+    return this.request<CivicActionDto>(`/api/civic-actions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
 
   // Civic Events (Mobilize API)
   async getCivicEvents(params?: { 
