@@ -1156,7 +1156,7 @@ app.get('/api/sync-logs', async (req, res) => {
 app.post('/api/civic-actions', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { title, description, eventType, location, eventDate } = req.body;
+    const { title, description, eventType, location, eventDate, imageUrl } = req.body;
 
     if (!title || !description) {
       return res.status(400).json({ error: 'Title and description are required' });
@@ -1171,6 +1171,7 @@ app.post('/api/civic-actions', authenticateToken, async (req, res) => {
         eventDate: eventDate ? new Date(eventDate) : null,
         userId,
         status: 'pending',
+        imageUrl: imageUrl || null,
       },
       include: {
         user: {
@@ -1242,6 +1243,69 @@ app.get('/api/civic-actions', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get civic actions error:', error);
     res.status(500).json({ error: 'Failed to fetch civic actions' });
+  }
+});
+
+// Get current user's civic actions (including pending) - visible only to the user
+app.get('/api/civic-actions/mine', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+
+    const civicActions = await prisma.civicAction.findMany({
+      where: { userId },
+      include: {
+        reviewer: {
+          select: { id: true, email: true, name: true }
+        }
+      },
+      orderBy: [
+        { status: 'asc' }, // pending first (alphabetically 'approved'>'pending'>'rejected'; to ensure pending first, we could map, but simple asc groups)
+        { createdAt: 'desc' }
+      ]
+    });
+
+    res.json(civicActions);
+  } catch (error) {
+    console.error('Get my civic actions error:', error);
+    res.status(500).json({ error: 'Failed to fetch your civic actions' });
+  }
+});
+
+// Update a civic action (owner-only) while status is pending
+app.put('/api/civic-actions/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+    const { title, description, eventType, location, eventDate, imageUrl } = req.body;
+
+    // Fetch and ensure ownership and pending status
+    const existing = await prisma.civicAction.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Civic action not found' });
+    }
+    if (existing.userId !== userId) {
+      return res.status(403).json({ error: 'Not allowed' });
+    }
+    if (existing.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending actions can be edited' });
+    }
+
+    const updated = await prisma.civicAction.update({
+      where: { id },
+      data: {
+        title: title ?? undefined,
+        description: description ?? undefined,
+        eventType: eventType ?? undefined,
+        location: location ?? undefined,
+        eventDate: eventDate ? new Date(eventDate) : undefined,
+        imageUrl: imageUrl ?? undefined,
+      }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Update civic action error:', error);
+    res.status(500).json({ error: 'Failed to update civic action' });
   }
 });
 

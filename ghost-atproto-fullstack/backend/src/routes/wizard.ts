@@ -208,8 +208,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
         ghostApiKey: true,
         ghostContentApiKey: true,
         blueskyHandle: true,
-        blueskyPassword: true,
-        createdAt: true
+        blueskyPassword: true, createdAt: true
       }
     });
 

@@ -149,6 +149,7 @@ model CivicAction {
   eventType   String?  @map("event_type")
   location    String?
   eventDate   DateTime? @map("event_date")
+  imageUrl    String?  @map("image_url")
   
   // Submission status
   status      String   @default("pending") // pending, approved, rejected

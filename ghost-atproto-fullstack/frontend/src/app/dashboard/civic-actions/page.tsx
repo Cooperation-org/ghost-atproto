@@ -20,6 +20,12 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PeopleIcon from '@mui/icons-material/People';
@@ -80,6 +86,21 @@ export default function CivicActionsPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [allEvents, setAllEvents] = useState<CivicEvent[]>([]);
+  interface MyCivicAction {
+    id: string;
+    title: string;
+    status: 'pending' | 'approved' | 'rejected' | string;
+    location?: string | null;
+    description?: string | null;
+    eventType?: string | null;
+    eventDate?: string | null;
+    imageUrl?: string | null;
+  }
+  const [myActions, setMyActions] = useState<MyCivicAction[]>([]);
+  const [adminPending, setAdminPending] = useState<MyCivicAction[]>([]);
+  const [approvedActions, setApprovedActions] = useState<MyCivicAction[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [modLoadingId, setModLoadingId] = useState<string | null>(null);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   
   // Advanced filters
@@ -87,6 +108,39 @@ export default function CivicActionsPage() {
   const [dateRangeFilter, setDateRangeFilter] = useState('');
   const [excludeFullFilter, setExcludeFullFilter] = useState(false);
   const [highPriorityFilter, setHighPriorityFilter] = useState(false);
+
+  // Create Civic Action modal state
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newEventType, setNewEventType] = useState('');
+  const [newEventTypeOther, setNewEventTypeOther] = useState('');
+  const [newLocation, setNewLocation] = useState('');
+  const [newEventDate, setNewEventDate] = useState(''); // ISO string
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputId = 'civic-action-image-input';
+
+  // Cleanup blob URLs on unmount and validate on mount
+  useEffect(() => {
+    // On mount, clear any stale blob URLs (from hot reload or cached state)
+    if (imagePreview && imagePreview.startsWith('blob:')) {
+      setImagePreview(null);
+      setImageFile(null);
+    }
+    
+    return () => {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(imagePreview);
+        } catch {}
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadEvents = useCallback(async (cursor?: string, append = false) => {
     try {
@@ -96,7 +150,7 @@ export default function CivicActionsPage() {
         setLoading(true);
       }
 
-      const response: CivicEventsResponse = await api.getCivicEvents({ cursor });
+      const response = await api.getCivicEvents({ cursor }) as unknown as CivicEventsResponse;
       
       if (append) {
         setAllEvents(prev => {
@@ -125,6 +179,37 @@ export default function CivicActionsPage() {
     }
   }, [nextCursor, loadingMore, loadEvents]);
 
+  // Convert approved civic actions to CivicEvent format
+  const convertToCivicEvent = useCallback((action: MyCivicAction): CivicEvent => {
+    const eventDate = action.eventDate ? new Date(action.eventDate).getTime() / 1000 : Date.now() / 1000;
+    return {
+      id: parseInt(action.id) || Math.random() * 1000000, // Use id or generate random
+      title: action.title,
+      summary: action.description || '',
+      description: action.description || '',
+      event_type: action.eventType || 'COMMUNITY',
+      featured_image_url: action.imageUrl || undefined,
+      timeslots: [{
+        start_date: eventDate,
+        end_date: eventDate + 3600, // 1 hour default duration
+        id: Math.random() * 1000000,
+        is_full: false,
+      }],
+      sponsor: {
+        name: 'Community Action',
+        org_type: 'COMMUNITY',
+      },
+      location: action.location ? {
+        venue: action.location,
+        locality: action.location,
+        region: '',
+      } : undefined,
+      browser_url: '#',
+      is_virtual: false,
+      timezone: 'America/New_York',
+    };
+  }, []);
+
   // Debounced search effect
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -135,7 +220,9 @@ export default function CivicActionsPage() {
 
   // Filter and search effect
   useEffect(() => {
-    let filteredEvents = [...allEvents];
+    // Merge Mobilize events with approved civic actions
+    const approvedCivicEvents = approvedActions.map(convertToCivicEvent);
+    let filteredEvents = [...allEvents, ...approvedCivicEvents];
 
     // Apply search filter
     if (debouncedSearchQuery.trim()) {
@@ -207,17 +294,57 @@ export default function CivicActionsPage() {
         default:
           const aDate = a.timeslots?.[0]?.start_date || 0;
           const bDate = b.timeslots?.[0]?.start_date || 0;
-          return aDate - bDate;
+          return bDate - aDate; // Sort descending (latest first)
       }
     });
 
     setEvents(filteredEvents);
-  }, [allEvents, debouncedSearchQuery, categoryFilter, statusFilter, dateRangeFilter, sortBy]);
+  }, [allEvents, approvedActions, debouncedSearchQuery, categoryFilter, statusFilter, dateRangeFilter, sortBy, convertToCivicEvent]);
 
   // Load initial events
   useEffect(() => {
     loadEvents();
-  }, [loadEvents]);
+    (async () => {
+      // Load user's own civic actions (pending/approved/rejected)
+      try {
+        const mine = await api.getMyCivicActions();
+        const cleanedMine = mine.map(action => ({
+          ...action,
+          imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+        }));
+        setMyActions(cleanedMine);
+      } catch {
+        // ignore silently; user might not be logged in or endpoint unavailable
+      }
+
+      // Load approved civic actions from all users
+      try {
+        const approved = await api.getCivicActions('approved');
+        const cleanedApproved = approved.map(action => ({
+          ...action,
+          imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+        }));
+        setApprovedActions(cleanedApproved);
+      } catch {
+        // ignore silently if endpoint unavailable
+      }
+
+      // Check admin and load pending submissions for moderation
+      try {
+        const me = await api.getMe();
+        if (me.role === 'ADMIN') {
+          setIsAdmin(true);
+          const pending = await api.getCivicActions('pending');
+          const cleanedPending = pending.map(action => ({
+            ...action,
+            imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+          }));
+          setAdminPending(cleanedPending);
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Infinite scroll effect
   useEffect(() => {
@@ -535,11 +662,391 @@ export default function CivicActionsPage() {
               width: { xs: '100%', sm: 'auto' },
               mt: { xs: 1, sm: 0 },
             }}
+            onClick={() => {
+              // Clear any stale state before opening
+              setImagePreview(null);
+              setImageFile(null);
+              setCreateOpen(true);
+            }}
           >
             Create New Action
           </Button>
         </Box>
       </Paper>
+
+      {/* Create Civic Action Dialog */}
+      <Dialog open={createOpen} onClose={() => {
+        if (!createLoading) {
+          // Clean up blob URL when closing
+          if (imagePreview && imagePreview.startsWith('blob:')) {
+            try { URL.revokeObjectURL(imagePreview); } catch {}
+          }
+          setCreateOpen(false);
+        }
+      }} maxWidth="sm" fullWidth>
+        <DialogTitle>Create Civic Action</DialogTitle>
+        <DialogContent dividers>
+          {createError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {createError}
+            </Alert>
+          )}
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Title"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              fullWidth
+              required
+              disabled={createLoading}
+            />
+            <TextField
+              label="Description"
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+              fullWidth
+              required
+              multiline
+              minRows={3}
+              disabled={createLoading}
+            />
+            <FormControl fullWidth required>
+              <InputLabel>Event Type</InputLabel>
+              <Select
+                value={newEventType}
+                label="Event Type"
+                onChange={(e) => setNewEventType(String(e.target.value))}
+                disabled={createLoading}
+              >
+                <MenuItem value="">Select type</MenuItem>
+                <MenuItem value="CANVASS">Canvass</MenuItem>
+                <MenuItem value="PHONE_BANK">Phone Bank</MenuItem>
+                <MenuItem value="TEXT_BANK">Text Bank</MenuItem>
+                <MenuItem value="MEETING">Meeting</MenuItem>
+                <MenuItem value="COMMUNITY">Community</MenuItem>
+                <MenuItem value="TRAINING">Training</MenuItem>
+                <MenuItem value="OTHER">Other</MenuItem>
+              </Select>
+            </FormControl>
+            {newEventType === 'OTHER' && (
+              <TextField
+                label="Specify Event Type"
+                value={newEventTypeOther}
+                onChange={(e) => setNewEventTypeOther(e.target.value)}
+                fullWidth
+                required
+                disabled={createLoading}
+                helperText="Provide a custom event type"
+              />
+            )}
+            <TextField
+              label="Location"
+              value={newLocation}
+              onChange={(e) => setNewLocation(e.target.value)}
+              fullWidth
+              required
+              disabled={createLoading}
+            />
+            <TextField
+              label="Event Date"
+              type="datetime-local"
+              value={newEventDate}
+              onChange={(e) => setNewEventDate(e.target.value)}
+              fullWidth
+              required
+              disabled={createLoading}
+              InputLabelProps={{ shrink: true }}
+              helperText="Local time will be converted to UTC"
+            />
+
+            {/* Add Photo (optional) */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <input
+                id={fileInputId}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  // Revoke previous blob to avoid leaks/broken refs
+                  if (imagePreview && imagePreview.startsWith('blob:')) {
+                    try { URL.revokeObjectURL(imagePreview); } catch {}
+                  }
+                  setImageFile(file || null);
+                  if (file) {
+                    const url = URL.createObjectURL(file);
+                    setImagePreview(url);
+                  } else {
+                    setImagePreview(null);
+                  }
+                }}
+              />
+              <Button
+                variant="outlined"
+                onClick={() => document.getElementById(fileInputId)?.click()}
+                disabled={createLoading}
+              >
+                {imageFile ? 'Change Photo' : 'Add Photo (optional)'}
+              </Button>
+              {imageFile && (
+                <Button
+                  variant="text"
+                  color="error"
+                  onClick={() => { 
+                    // Revoke blob URL before removing
+                    if (imagePreview && imagePreview.startsWith('blob:')) {
+                      try { URL.revokeObjectURL(imagePreview); } catch {}
+                    }
+                    setImageFile(null); 
+                    setImagePreview(null); 
+                  }}
+                  disabled={createLoading}
+                >
+                  Remove
+                </Button>
+              )}
+            </Box>
+            {imagePreview && (
+              <Box sx={{ mt: 1 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  src={imagePreview} 
+                  alt="Preview" 
+                  style={{ maxWidth: '100%', borderRadius: 8 }} 
+                  onError={() => {
+                    // If image fails to load (e.g., invalid blob URL), hide it
+                    console.warn('Image preview failed to load:', imagePreview);
+                    setImagePreview(null);
+                    setImageFile(null);
+                  }}
+                />
+              </Box>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={createLoading} onClick={() => { 
+            // Clean up blob URL when canceling
+            if (imagePreview && imagePreview.startsWith('blob:')) {
+              try { URL.revokeObjectURL(imagePreview); } catch {}
+            }
+            setCreateOpen(false); 
+            (globalThis as { __editActionId?: string }).__editActionId = undefined; 
+          }}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={createLoading}
+            onClick={async () => {
+              setCreateError(null);
+              if (!newTitle.trim() || !newDescription.trim() || !newEventType || (newEventType === 'OTHER' && !newEventTypeOther.trim()) || !newLocation.trim() || !newEventDate) {
+                setCreateError('All fields are required except the photo');
+                return;
+              }
+              setCreateLoading(true);
+              try {
+                const isoDate = newEventDate ? new Date(newEventDate).toISOString() : undefined;
+                const editId = (globalThis as { __editActionId?: string }).__editActionId;
+                const safeImageUrl = imagePreview && !imagePreview.startsWith('blob:') ? imagePreview : undefined;
+                if (editId) {
+                  await api.updateCivicAction(editId, {
+                    title: newTitle.trim(),
+                    description: newDescription.trim(),
+                    eventType: newEventType === 'OTHER' ? newEventTypeOther.trim() : newEventType,
+                    location: newLocation || undefined,
+                    eventDate: isoDate,
+                    imageUrl: safeImageUrl,
+                  });
+                  setCreateSuccess('Civic action updated');
+                } else {
+                  await api.createCivicAction({
+                    title: newTitle.trim(),
+                    description: newDescription.trim(),
+                    eventType: newEventType === 'OTHER' ? newEventTypeOther.trim() : newEventType,
+                    location: newLocation || undefined,
+                    eventDate: isoDate,
+                    imageUrl: safeImageUrl,
+                  });
+                  setCreateSuccess('Civic action submitted for review');
+                }
+                // Clean up blob URL after successful submission
+                if (imagePreview && imagePreview.startsWith('blob:')) {
+                  try { URL.revokeObjectURL(imagePreview); } catch {}
+                }
+                // reset form
+                setNewTitle('');
+                setNewDescription('');
+                setNewEventType('');
+                setNewEventTypeOther('');
+                setNewLocation('');
+                setNewEventDate('');
+                setImageFile(null);
+                setImagePreview(null);
+                setCreateOpen(false);
+                (globalThis as { __editActionId?: string }).__editActionId = undefined;
+                // Optionally refresh approved list for non-admins; admins will see pending via dedicated screen later
+                // No change to Mobilize events list; this submission is handled in admin moderation views
+              } catch (e: unknown) {
+                setCreateError(e instanceof Error ? e.message : 'Failed to submit action');
+              } finally {
+                setCreateLoading(false);
+              }
+            }}
+          >
+            {createLoading ? 'Submitting...' : 'Submit'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={Boolean(createSuccess)}
+        autoHideDuration={3000}
+        onClose={() => setCreateSuccess(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setCreateSuccess(null)} severity="success" sx={{ width: '100%' }}>
+          {createSuccess}
+        </Alert>
+      </Snackbar>
+
+      {/* My Pending Actions (visible to creator only) */}
+      {myActions.length > 0 && (
+        <Paper sx={{ p: 2, mb: 4, borderRadius: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>My Pending Actions</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            These are actions you submitted. Only you can see pending ones until reviewed by an admin.
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {myActions
+              .filter(a => a.status === 'pending')
+              .map(a => (
+                <Box 
+                  key={a.id} 
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    cursor: 'pointer',
+                    p: 1,
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: 'grey.200',
+                    background: a.imageUrl ? `url(${a.imageUrl}) center/cover no-repeat` : 'transparent',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                  onClick={() => {
+                    // open editor prefilled
+                    setCreateOpen(true);
+                    setCreateError(null);
+                    setNewTitle(a.title || '');
+                    setNewDescription(a.description || '');
+                    setNewEventType((a.eventType && ['CANVASS','PHONE_BANK','TEXT_BANK','MEETING','COMMUNITY','TRAINING'].includes(a.eventType)) ? a.eventType : (a.eventType ? 'OTHER' : ''));
+                    setNewEventTypeOther((a.eventType && !['CANVASS','PHONE_BANK','TEXT_BANK','MEETING','COMMUNITY','TRAINING'].includes(a.eventType)) ? a.eventType : '');
+                    setNewLocation(a.location || '');
+                    setNewEventDate(a.eventDate ? new Date(a.eventDate).toISOString().slice(0,16) : '');
+                    setImagePreview(a.imageUrl || null);
+                    // store id to update instead of create
+                    (globalThis as { __editActionId?: string }).__editActionId = a.id;
+                  }}
+                >
+                  {a.imageUrl && (
+                    <Box sx={{
+                      position: 'absolute',
+                      inset: 0,
+                      backdropFilter: 'blur(2px)',
+                      backgroundColor: 'rgba(0,0,0,0.25)'
+                    }} />
+                  )}
+                  <Chip label={a.status} color="warning" size="small" />
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{a.title}</Typography>
+                  <Typography variant="caption" color="text.secondary">• {a.location || 'No location'}</Typography>
+                </Box>
+              ))}
+            {myActions.filter(a => a.status === 'pending').length === 0 && (
+              <Typography variant="body2" color="text.secondary">No pending actions.</Typography>
+            )}
+          </Box>
+        </Paper>
+      )}
+
+      {/* Admin Pending Moderation */}
+      {isAdmin && (
+        <Paper sx={{ p: 2, mb: 4, borderRadius: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>Pending Civic Actions (Admin)</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Review submissions and approve or reject them. Approved/rejected items disappear from this list.
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            {adminPending.length === 0 && (
+              <Typography variant="body2" color="text.secondary">No pending submissions.</Typography>
+            )}
+            {adminPending.map(a => (
+              <Card key={a.id} sx={{ width: 320, borderRadius: 2, overflow: 'hidden', border: '1px solid', borderColor: 'grey.200' }}>
+                <Box sx={{ position: 'relative', height: 140, bgcolor: 'grey.100' }}>
+                  {a.imageUrl ? (
+                    <CardMedia component="img" height={140} image={a.imageUrl} alt={a.title} sx={{ objectFit: 'cover' }} />
+                  ) : (
+                    <Box sx={{ height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.100' }}>
+                      <CampaignIcon sx={{ fontSize: 40, color: 'grey.500' }} />
+                    </Box>
+                  )}
+                  <Chip label="pending" size="small" color="warning" sx={{ position: 'absolute', top: 8, left: 8 }} />
+                </Box>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography variant="subtitle1" fontWeight={700} gutterBottom noWrap title={a.title}>{a.title}</Typography>
+                  <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                    {a.location || 'No location'}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="success"
+                      disabled={modLoadingId === a.id}
+                      onClick={async () => {
+                        setModLoadingId(a.id);
+                        try {
+                          await api.approveCivicAction(a.id, false);
+                          setAdminPending(prev => prev.filter(x => x.id !== a.id));
+                          // Refresh approved actions list
+                          const approved = await api.getCivicActions('approved');
+                          // Filter out any blob URLs from the data
+                          const cleanedApproved = approved.map(action => ({
+                            ...action,
+                            imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+                          }));
+                          setApprovedActions(cleanedApproved);
+                        } finally {
+                          setModLoadingId(null);
+                        }
+                      }}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      disabled={modLoadingId === a.id}
+                      onClick={async () => {
+                        setModLoadingId(a.id);
+                        try {
+                          await api.rejectCivicAction(a.id, 'Not approved');
+                          setAdminPending(prev => prev.filter(x => x.id !== a.id));
+                        } finally {
+                          setModLoadingId(null);
+                        }
+                      }}
+                    >
+                      Reject
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        </Paper>
+      )}
 
       {/* Results Counter */}
       {events.length > 0 && (
@@ -670,7 +1177,7 @@ export default function CivicActionsPage() {
                     )}
 
                     {/* Event Type Badge */}
-                    <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+                    <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 1, flexDirection: 'column', alignItems: 'flex-end' }}>
                       <Chip
                         label={(event.event_type ?? 'OTHER').replace(/_/g, ' ')}
                         size="small"
@@ -681,6 +1188,18 @@ export default function CivicActionsPage() {
                           backdropFilter: 'blur(10px)',
                         }}
                       />
+                      {event.sponsor.name === 'Community Action' && (
+                        <Chip
+                          label="Community"
+                          size="small"
+                          sx={{
+                            bgcolor: 'rgba(76, 175, 80, 0.95)',
+                            color: 'white',
+                            fontWeight: 600,
+                            backdropFilter: 'blur(10px)',
+                          }}
+                        />
+                      )}
                     </Box>
 
                     <CardContent sx={{ 
