@@ -521,8 +521,8 @@ app.post(
   }
 );
 
-// Generic JSON body parser
-app.use(express.json());
+// Generic JSON body parser with increased limit for image uploads
+app.use(express.json({ limit: '10mb' }));
 
 
 // Routes
@@ -1187,6 +1187,14 @@ app.post('/api/civic-actions', authenticateToken, async (req, res) => {
     res.json(civicAction);
   } catch (error) {
     console.error('Create civic action error:', error);
+    console.error('Request body:', { 
+      title: req.body?.title, 
+      description: req.body?.description?.substring(0, 100) + '...', 
+      eventType: req.body?.eventType,
+      location: req.body?.location,
+      eventDate: req.body?.eventDate,
+      imageUrlLength: req.body?.imageUrl?.length || 0
+    });
     res.status(500).json({ error: 'Failed to create civic action' });
   }
 });

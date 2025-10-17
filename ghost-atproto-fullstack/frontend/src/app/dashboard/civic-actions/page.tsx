@@ -103,6 +103,10 @@ export default function CivicActionsPage() {
   const [modLoadingId, setModLoadingId] = useState<string | null>(null);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   
+  // Admin detail modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedAction, setSelectedAction] = useState<MyCivicAction | null>(null);
+  
   // Advanced filters
   const [zipcodeFilter, setZipcodeFilter] = useState('');
   const [dateRangeFilter, setDateRangeFilter] = useState('');
@@ -301,48 +305,106 @@ export default function CivicActionsPage() {
     setEvents(filteredEvents);
   }, [allEvents, approvedActions, debouncedSearchQuery, categoryFilter, statusFilter, dateRangeFilter, sortBy, convertToCivicEvent]);
 
+  // Function to compress image before converting to base64
+  const compressImage = useCallback((file: File, maxWidth: number = 600, quality: number = 0.6): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Calculate new dimensions
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw and compress
+        ctx?.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              reject(new Error('Failed to compress image'));
+            }
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }, []);
+
+  // Function to convert image file to base64
+  const convertImageToBase64 = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  // Function to refresh civic action data
+  const refreshCivicActions = useCallback(async () => {
+    try {
+      // Load user's own civic actions (pending/approved/rejected)
+      const mine = await api.getMyCivicActions();
+      const cleanedMine = mine.map(action => ({
+        ...action,
+        imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+      }));
+      setMyActions(cleanedMine);
+    } catch {
+      // ignore silently; user might not be logged in or endpoint unavailable
+    }
+
+    try {
+      // Load approved civic actions from all users
+      const approved = await api.getCivicActions('approved');
+      const cleanedApproved = approved.map(action => ({
+        ...action,
+        imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+      }));
+      setApprovedActions(cleanedApproved);
+    } catch {
+      // ignore silently if endpoint unavailable
+    }
+
+    try {
+      // Check admin and load pending submissions for moderation
+      const me = await api.getMe();
+      if (me.role === 'ADMIN') {
+        setIsAdmin(true);
+        const pending = await api.getCivicActions('pending');
+        const cleanedPending = pending.map(action => ({
+          ...action,
+          imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+        }));
+        setAdminPending(cleanedPending);
+      }
+    } catch {}
+  }, []);
+
   // Load initial events
   useEffect(() => {
     loadEvents();
-    (async () => {
-      // Load user's own civic actions (pending/approved/rejected)
-      try {
-        const mine = await api.getMyCivicActions();
-        const cleanedMine = mine.map(action => ({
-          ...action,
-          imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
-        }));
-        setMyActions(cleanedMine);
-      } catch {
-        // ignore silently; user might not be logged in or endpoint unavailable
-      }
-
-      // Load approved civic actions from all users
-      try {
-        const approved = await api.getCivicActions('approved');
-        const cleanedApproved = approved.map(action => ({
-          ...action,
-          imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
-        }));
-        setApprovedActions(cleanedApproved);
-      } catch {
-        // ignore silently if endpoint unavailable
-      }
-
-      // Check admin and load pending submissions for moderation
-      try {
-        const me = await api.getMe();
-        if (me.role === 'ADMIN') {
-          setIsAdmin(true);
-          const pending = await api.getCivicActions('pending');
-          const cleanedPending = pending.map(action => ({
-            ...action,
-            imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
-          }));
-          setAdminPending(cleanedPending);
-        }
-      } catch {}
-    })();
+    refreshCivicActions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -846,7 +908,18 @@ export default function CivicActionsPage() {
               try {
                 const isoDate = newEventDate ? new Date(newEventDate).toISOString() : undefined;
                 const editId = (globalThis as { __editActionId?: string }).__editActionId;
-                const safeImageUrl = imagePreview && !imagePreview.startsWith('blob:') ? imagePreview : undefined;
+                
+                // Convert image file to base64 if present
+                let imageUrl: string | undefined = undefined;
+                if (imageFile) {
+                  // Compress image first to reduce size
+                  const compressedFile = await compressImage(imageFile);
+                  imageUrl = await convertImageToBase64(compressedFile);
+                } else if (imagePreview && !imagePreview.startsWith('blob:')) {
+                  // Use existing image URL if it's not a blob
+                  imageUrl = imagePreview;
+                }
+                
                 if (editId) {
                   await api.updateCivicAction(editId, {
                     title: newTitle.trim(),
@@ -854,9 +927,11 @@ export default function CivicActionsPage() {
                     eventType: newEventType === 'OTHER' ? newEventTypeOther.trim() : newEventType,
                     location: newLocation || undefined,
                     eventDate: isoDate,
-                    imageUrl: safeImageUrl,
+                    imageUrl,
                   });
                   setCreateSuccess('Civic action updated');
+                  // Refresh civic actions to show updated action
+                  await refreshCivicActions();
                 } else {
                   await api.createCivicAction({
                     title: newTitle.trim(),
@@ -864,9 +939,11 @@ export default function CivicActionsPage() {
                     eventType: newEventType === 'OTHER' ? newEventTypeOther.trim() : newEventType,
                     location: newLocation || undefined,
                     eventDate: isoDate,
-                    imageUrl: safeImageUrl,
+                    imageUrl,
                   });
                   setCreateSuccess('Civic action submitted for review');
+                  // Refresh civic actions to show the new pending action
+                  await refreshCivicActions();
                 }
                 // Clean up blob URL after successful submission
                 if (imagePreview && imagePreview.startsWith('blob:')) {
@@ -907,6 +984,164 @@ export default function CivicActionsPage() {
           {createSuccess}
         </Alert>
       </Snackbar>
+
+      {/* Admin Detail Modal */}
+      <Dialog 
+        open={detailModalOpen} 
+        onClose={() => {
+          setDetailModalOpen(false);
+          setSelectedAction(null);
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CampaignIcon color="primary" />
+            <Typography variant="h6">Civic Action Details</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {selectedAction && (
+            <Stack spacing={3} sx={{ mt: 1 }}>
+              {/* Image */}
+              {selectedAction.imageUrl && (
+                <Box sx={{ textAlign: 'center' }}>
+                  <img 
+                    src={selectedAction.imageUrl} 
+                    alt={selectedAction.title}
+                    style={{ 
+                      maxWidth: '100%', 
+                      maxHeight: '300px', 
+                      borderRadius: 8,
+                      objectFit: 'cover'
+                    }}
+                  />
+                </Box>
+              )}
+              
+              {/* Title */}
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                  {selectedAction.title}
+                </Typography>
+                <Chip 
+                  label={selectedAction.status} 
+                  color={selectedAction.status === 'pending' ? 'warning' : selectedAction.status === 'approved' ? 'success' : 'error'}
+                  size="small"
+                />
+              </Box>
+
+              {/* Description */}
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  Description
+                </Typography>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedAction.description}
+                </Typography>
+              </Box>
+
+              {/* Event Details */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Event Type
+                  </Typography>
+                  <Typography variant="body2">
+                    {selectedAction.eventType || 'Not specified'}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Location
+                  </Typography>
+                  <Typography variant="body2">
+                    {selectedAction.location || 'Not specified'}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Event Date
+                  </Typography>
+                  <Typography variant="body2">
+                    {selectedAction.eventDate 
+                      ? new Date(selectedAction.eventDate).toLocaleString()
+                      : 'Not specified'
+                    }
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                    Submitted
+                  </Typography>
+                  <Typography variant="body2">
+                    {new Date().toLocaleDateString()} {/* You might want to add createdAt to the data */}
+                  </Typography>
+                </Box>
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setDetailModalOpen(false);
+            setSelectedAction(null);
+          }}>
+            Close
+          </Button>
+          {selectedAction && (
+            <>
+              <Button
+                variant="contained"
+                color="success"
+                disabled={modLoadingId === selectedAction.id}
+                onClick={async () => {
+                  setModLoadingId(selectedAction.id);
+                  try {
+                    await api.approveCivicAction(selectedAction.id, false);
+                    setAdminPending(prev => prev.filter(x => x.id !== selectedAction.id));
+                    // Refresh approved actions list
+                    const approved = await api.getCivicActions('approved');
+                    const cleanedApproved = approved.map(action => ({
+                      ...action,
+                      imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+                    }));
+                    setApprovedActions(cleanedApproved);
+                    setDetailModalOpen(false);
+                    setSelectedAction(null);
+                  } finally {
+                    setModLoadingId(null);
+                  }
+                }}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                disabled={modLoadingId === selectedAction.id}
+                onClick={async () => {
+                  setModLoadingId(selectedAction.id);
+                  try {
+                    await api.rejectCivicAction(selectedAction.id, 'Not approved');
+                    setAdminPending(prev => prev.filter(x => x.id !== selectedAction.id));
+                    setDetailModalOpen(false);
+                    setSelectedAction(null);
+                  } finally {
+                    setModLoadingId(null);
+                  }
+                }}
+              >
+                Reject
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
 
       {/* My Pending Actions (visible to creator only) */}
       {myActions.length > 0 && (
@@ -981,7 +1216,27 @@ export default function CivicActionsPage() {
               <Typography variant="body2" color="text.secondary">No pending submissions.</Typography>
             )}
             {adminPending.map(a => (
-              <Card key={a.id} sx={{ width: 320, borderRadius: 2, overflow: 'hidden', border: '1px solid', borderColor: 'grey.200' }}>
+              <Card 
+                key={a.id} 
+                sx={{ 
+                  width: 320, 
+                  borderRadius: 2, 
+                  overflow: 'hidden', 
+                  border: '1px solid', 
+                  borderColor: 'grey.200',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    borderColor: 'primary.main',
+                  }
+                }}
+                onClick={() => {
+                  setSelectedAction(a);
+                  setDetailModalOpen(true);
+                }}
+              >
                 <Box sx={{ position: 'relative', height: 140, bgcolor: 'grey.100' }}>
                   {a.imageUrl ? (
                     <CardMedia component="img" height={140} image={a.imageUrl} alt={a.title} sx={{ objectFit: 'cover' }} />
@@ -997,28 +1252,31 @@ export default function CivicActionsPage() {
                   <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
                     {a.location || 'No location'}
                   </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: '0.75rem' }}>
+                    Click to view details
+                  </Typography>
                   <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button
                       size="small"
                       variant="contained"
                       color="success"
                       disabled={modLoadingId === a.id}
-                      onClick={async () => {
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent card click
                         setModLoadingId(a.id);
-                        try {
-                          await api.approveCivicAction(a.id, false);
+                        api.approveCivicAction(a.id, false).then(() => {
                           setAdminPending(prev => prev.filter(x => x.id !== a.id));
                           // Refresh approved actions list
-                          const approved = await api.getCivicActions('approved');
-                          // Filter out any blob URLs from the data
-                          const cleanedApproved = approved.map(action => ({
-                            ...action,
-                            imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
-                          }));
-                          setApprovedActions(cleanedApproved);
-                        } finally {
+                          api.getCivicActions('approved').then(approved => {
+                            const cleanedApproved = approved.map(action => ({
+                              ...action,
+                              imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+                            }));
+                            setApprovedActions(cleanedApproved);
+                          });
+                        }).finally(() => {
                           setModLoadingId(null);
-                        }
+                        });
                       }}
                     >
                       Approve
@@ -1028,14 +1286,14 @@ export default function CivicActionsPage() {
                       variant="outlined"
                       color="error"
                       disabled={modLoadingId === a.id}
-                      onClick={async () => {
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent card click
                         setModLoadingId(a.id);
-                        try {
-                          await api.rejectCivicAction(a.id, 'Not approved');
+                        api.rejectCivicAction(a.id, 'Not approved').then(() => {
                           setAdminPending(prev => prev.filter(x => x.id !== a.id));
-                        } finally {
+                        }).finally(() => {
                           setModLoadingId(null);
-                        }
+                        });
                       }}
                     >
                       Reject
