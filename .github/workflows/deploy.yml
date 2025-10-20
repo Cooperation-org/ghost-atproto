@@ -1,0 +1,84 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to Dev Server
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Deploy to development server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            sudo su - civicsky << 'DEPLOY_SCRIPT'
+            set -e
+            
+            echo "🚀 Deploying to DEV (manual migrations)..."
+            
+            cd ~/ghost-atproto/ghost-atproto-fullstack
+            
+            # Clean builds
+            echo "🧹 Cleaning build artifacts..."
+            rm -rf frontend/.next backend/dist
+            
+            # Pull latest
+            echo "📥 Pulling latest code..."
+            git pull origin main
+            
+            # Backend
+            echo "🔧 Deploying Backend..."
+            cd backend
+            npm ci
+            npx prisma generate
+            # NOTE: Migrations NOT applied automatically
+            # Run manually: npx prisma migrate deploy
+            npm run build
+            pm2 restart atproto-backend
+            
+            # Frontend  
+            echo "🎨 Deploying Frontend..."
+            cd ../frontend
+            npm ci
+            npm run build
+            pm2 restart atproto-frontend
+            
+            echo "💾 Saving PM2 config..."
+            pm2 save
+            
+            echo "✅ Deployment complete!"
+            pm2 list
+            
+            # Health check
+            echo "🔍 Checking health..."
+            sleep 5
+            curl -f http://localhost:5000/api/health || exit 1
+            
+            # Check for pending migrations
+            cd ~/ghost-atproto/ghost-atproto-fullstack/backend
+            PENDING=$(npx prisma migrate status 2>&1 | grep -c "have not yet been applied" || true)
+            if [ "$PENDING" -gt "0" ]; then
+              echo "⚠️  WARNING: There are pending database migrations!"
+              echo "📋 To apply them, run:"
+              echo "   ssh ubuntu@204.236.176.29"
+              echo "   sudo su - civicsky"
+              echo "   cd ~/ghost-atproto/ghost-atproto-fullstack/backend"
+              echo "   npx prisma migrate deploy"
+            else
+              echo "✅ No pending migrations"
+            fi
+            
+            DEPLOY_SCRIPT
+            
+      - name: Notify on failure
+        if: failure()
+        run: echo "❌ Deployment failed! Check the logs."
