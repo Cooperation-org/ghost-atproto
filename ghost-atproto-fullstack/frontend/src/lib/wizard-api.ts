@@ -37,6 +37,7 @@ export interface WizardCompleteResponse {
 
 export interface WizardStatusResponse {
   isComplete: boolean;
+  isSkipped: boolean;
   hasGhost: boolean;
   hasBluesky: boolean;
 }
@@ -110,6 +111,12 @@ class WizardApiClient {
 
   async getStatus(): Promise<WizardStatusResponse> {
     return this.request<WizardStatusResponse>('/api/wizard/status');
+  }
+
+  async skipWizard(): Promise<{ success: boolean; message: string; skipped: boolean }> {
+    return this.request<{ success: boolean; message: string; skipped: boolean }>('/api/wizard/skip', {
+      method: 'POST',
+    });
   }
 }
 

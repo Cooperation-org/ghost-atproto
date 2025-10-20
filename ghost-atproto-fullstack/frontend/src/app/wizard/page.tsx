@@ -31,6 +31,7 @@ export default function WizardPage() {
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [skipping, setSkipping] = useState(false);
   
   // Form data
   const [formData, setFormData] = useState({
@@ -131,6 +132,25 @@ export default function WizardPage() {
 
   const handleFinish = () => {
     router.push('/dashboard');
+  };
+
+  const handleSkip = async () => {
+    setSkipping(true);
+    setError('');
+
+    try {
+      const result = await wizardApi.skipWizard();
+      if (result.success) {
+        router.push('/dashboard');
+      } else {
+        setError('Failed to skip wizard setup');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to skip wizard setup';
+      setError(msg);
+    } finally {
+      setSkipping(false);
+    }
   };
 
   const getStepContent = (step: number) => {
@@ -383,6 +403,44 @@ export default function WizardPage() {
                 )}
               </Button>
 
+              {/* Skip Button for Authors */}
+              <Button
+                variant="outlined"
+                fullWidth
+                size="large"
+                disabled={loading || skipping}
+                onClick={handleSkip}
+                sx={{ 
+                  mt: 2, 
+                  py: 1.5, 
+                  borderColor: 'grey.400',
+                  color: 'text.secondary',
+                  '&:hover': { 
+                    borderColor: 'grey.600',
+                    color: 'text.primary',
+                    bgcolor: 'grey.50'
+                  },
+                  textTransform: 'none',
+                  fontSize: '1rem',
+                  fontWeight: 500,
+                  borderRadius: 2,
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                {skipping ? (
+                  <>
+                    <CircularProgress size={20} sx={{ mr: 1 }} color="inherit" />
+                    Skipping Setup...
+                  </>
+                ) : (
+                  'Skip Setup for Now'
+                )}
+              </Button>
+
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, textAlign: 'center', display: 'block' }}>
+                You can configure Ghost and Bluesky later from your dashboard
+              </Typography>
+
               {ghostValidation?.valid && (
                 <Alert 
                   severity="success" 
@@ -475,6 +533,44 @@ export default function WizardPage() {
                       🔐 <strong>Security:</strong> App passwords are more secure than using your main password
                     </Typography>
                   </Box>
+
+                  {/* Skip Button for Authors */}
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    size="large"
+                    disabled={loading || skipping}
+                    onClick={handleSkip}
+                    sx={{ 
+                      mt: 3, 
+                      py: 1.5, 
+                      borderColor: 'grey.400',
+                      color: 'text.secondary',
+                      '&:hover': { 
+                        borderColor: 'grey.600',
+                        color: 'text.primary',
+                        bgcolor: 'grey.50'
+                      },
+                      textTransform: 'none',
+                      fontSize: '1rem',
+                      fontWeight: 500,
+                      borderRadius: 2,
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    {skipping ? (
+                      <>
+                        <CircularProgress size={20} sx={{ mr: 1 }} color="inherit" />
+                        Skipping Setup...
+                      </>
+                    ) : (
+                      'Skip Bluesky Setup'
+                    )}
+                  </Button>
+
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, textAlign: 'center', display: 'block' }}>
+                    You can configure Bluesky later from your dashboard
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
