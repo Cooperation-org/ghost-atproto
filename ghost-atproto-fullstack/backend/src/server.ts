@@ -88,7 +88,7 @@ export async function registerGhostWebhook(ghostUrl: string, ghostApiKey: string
       audience: `/admin/`
     });
 
-    const webhookUrl = `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/ghost/webhook`;
+    const webhookUrl = `${process.env.BACKEND_URL || 'http://204.236.176.29'}/api/ghost/webhook`;
     
     // Check if webhook already exists
     const existingWebhooks = await axios.get(`${ghostUrl}/ghost/api/admin/webhooks/`, {

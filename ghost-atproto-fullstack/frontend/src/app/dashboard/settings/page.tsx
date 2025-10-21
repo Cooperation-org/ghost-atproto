@@ -10,9 +10,17 @@ import {
   Alert,
   CircularProgress,
   Grid,
+  Card,
+  CardContent,
+  Chip,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import WebhookIcon from '@mui/icons-material/Webhook';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
 import { User } from '@/lib/types';
@@ -199,6 +207,88 @@ export default function SettingsPage() {
           </Grid>
         </Grid>
       </Paper>
+
+      {/* Webhook Information - Show when Ghost is configured but Bluesky is skipped */}
+      {formData.ghostUrl && formData.ghostApiKey && 
+       (formData.blueskyHandle === 'SKIPPED' || formData.blueskyPassword === 'SKIPPED' || 
+        (!formData.blueskyHandle && !formData.blueskyPassword)) && (
+        <Paper sx={{ p: 3, mt: 3, backgroundColor: '#f8f9fa' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <WebhookIcon sx={{ mr: 1, color: 'primary.main' }} />
+            <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
+              Ghost Webhook Configuration
+            </Typography>
+            <Chip 
+              icon={<CheckCircleIcon />} 
+              label="Auto-sync Enabled" 
+              color="success" 
+              size="small" 
+              sx={{ ml: 2 }} 
+            />
+          </Box>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Your Ghost posts are automatically synced to this platform. To enable webhook notifications, 
+            add the following webhook URL to your Ghost admin panel:
+          </Typography>
+
+          <Card sx={{ mb: 2 }}>
+            <CardContent sx={{ py: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography 
+                  variant="body1" 
+                  sx={{ 
+                    fontFamily: 'monospace', 
+                    backgroundColor: '#f5f5f5', 
+                    p: 1, 
+                    borderRadius: 1,
+                    flex: 1,
+                    mr: 1
+                  }}
+                >
+                  http://204.236.176.29/api/ghost/webhook
+                </Typography>
+                <Tooltip title="Copy webhook URL">
+                  <IconButton 
+                    onClick={() => {
+                      navigator.clipboard.writeText('http://204.236.176.29/api/ghost/webhook');
+                      setSuccess('Webhook URL copied to clipboard!');
+                    }}
+                    size="small"
+                  >
+                    <ContentCopyIcon />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </CardContent>
+          </Card>
+
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+              Setup Instructions:
+            </Typography>
+            <Typography variant="body2" component="div">
+              1. Go to your Ghost Admin panel<br/>
+              2. Navigate to <strong>Settings → Integrations</strong><br/>
+              3. Click <strong>"Add custom integration"</strong><br/>
+              4. Name it <strong>"Auto-Sync Bridge"</strong><br/>
+              5. Click <strong>"Add webhook"</strong><br/>
+              6. Configure the webhook:<br/>
+              &nbsp;&nbsp;• <strong>Event:</strong> Post published<br/>
+              &nbsp;&nbsp;• <strong>URL:</strong> http://204.236.176.29/api/ghost/webhook<br/>
+              &nbsp;&nbsp;• <strong>Header:</strong> X-User-ID = {user?.id}<br/>
+              7. Save the webhook
+            </Typography>
+          </Alert>
+
+          <Alert severity="success">
+            <Typography variant="body2">
+              <strong>✅ Auto-sync is working!</strong> Your posts are being synced automatically. 
+              The webhook will notify this platform immediately when you publish new posts in Ghost.
+            </Typography>
+          </Alert>
+        </Paper>
+      )}
 
       <Paper sx={{ p: 3, mt: 3 }}>
         <Typography variant="h6" gutterBottom>
