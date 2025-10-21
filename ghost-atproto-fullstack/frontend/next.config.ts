@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // basePath: '/bridge',
-  // assetPrefix: '/bridge',
+  basePath: '/bridge',
+  assetPrefix: '/bridge',
   // Fix workspace root detection to prevent lockfile warnings
   outputFileTracingRoot: __dirname,
   webpack: (config, { isServer }) => {
