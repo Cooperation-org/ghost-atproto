@@ -89,20 +89,6 @@ export default function DashboardPage() {
           <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
             Connect your Ghost site to start syncing articles to Bluesky automatically
           </Typography>
-          <Button 
-            variant="contained" 
-            size="large"
-            onClick={() => window.location.href = '/bridge/wizard'}
-            sx={{ 
-              textTransform: 'none',
-              px: 4,
-              py: 1.5,
-              borderRadius: 2,
-              fontWeight: 600
-            }}
-          >
-            Setup Your Connection
-          </Button>
         </Paper>
       ) : (
         <Grid container spacing={4}>
