@@ -1437,6 +1437,16 @@ finalApp.use(cors({
   ], 
   credentials: true 
 }));
+
+// Add redirect for /wizard/ to /bridge/wizard
+finalApp.get('/wizard', (req, res) => {
+  res.redirect(301, '/bridge/wizard');
+});
+
+finalApp.get('/wizard/', (req, res) => {
+  res.redirect(301, '/bridge/wizard');
+});
+
 finalApp.use('/bridge', app);
 finalApp.use('/', app);
 
