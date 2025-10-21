@@ -48,7 +48,7 @@ jobs:
             # Frontend  
             echo "🎨 Deploying Frontend..."
             cd ../frontend
-            npm ci
+            npm install
             npm run build
             pm2 restart atproto-frontend
             
