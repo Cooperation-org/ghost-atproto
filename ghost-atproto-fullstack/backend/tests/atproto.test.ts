@@ -13,7 +13,8 @@ export const manualTestExamples = {
     const user = await prisma.user.create({
       data: {
         email: 'test@example.com',
-        name: 'Test User'
+        name: 'Test User',
+        password: 'testpassword123'
       }
     });
 
@@ -33,7 +34,7 @@ export const manualTestExamples = {
 
   // Test the publish endpoint
   testPublish: async (postId: string) => {
-    const response = await fetch('http://localhost:5001/api/atproto/publish', {
+    const response = await fetch('http://localhost:5000/api/atproto/publish', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -46,7 +47,7 @@ export const manualTestExamples = {
 
   // Test error cases
   testMissingPostId: async () => {
-    const response = await fetch('http://localhost:5001/api/atproto/publish', {
+    const response = await fetch('http://localhost:5000/api/atproto/publish', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,7 +59,7 @@ export const manualTestExamples = {
   },
 
   testNonExistentPost: async () => {
-    const response = await fetch('http://localhost:5001/api/atproto/publish', {
+    const response = await fetch('http://localhost:5000/api/atproto/publish', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,12 +72,12 @@ export const manualTestExamples = {
 
   // Test sync logs endpoints
   testGetSyncLogs: async () => {
-    const response = await fetch('http://localhost:5001/api/atproto/sync-logs');
+    const response = await fetch('http://localhost:5000/api/atproto/sync-logs');
     return await response.json();
   },
 
   testGetPostSyncLogs: async (postId: string) => {
-    const response = await fetch(`http://localhost:5001/api/atproto/sync-logs/${postId}`);
+    const response = await fetch(`http://localhost:5000/api/atproto/sync-logs/${postId}`);
     return await response.json();
   }
 };

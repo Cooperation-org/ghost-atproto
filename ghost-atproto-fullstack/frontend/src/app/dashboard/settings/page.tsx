@@ -119,7 +119,7 @@ export default function SettingsPage() {
         <Button
           variant="outlined"
           startIcon={<SettingsIcon />}
-          onClick={() => router.push('/wizard')}
+          onClick={() => router.push('/bridge/wizard')}
         >
           Setup Wizard
         </Button>

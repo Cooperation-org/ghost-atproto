@@ -92,7 +92,7 @@ export default function DashboardPage() {
           <Button 
             variant="contained" 
             size="large"
-            onClick={() => window.location.href = '/wizard'}
+            onClick={() => window.location.href = '/bridge/wizard'}
             sx={{ 
               textTransform: 'none',
               px: 4,

@@ -58,7 +58,7 @@ export default function SignupPage() {
       const selectedRole = res.user.role || role;
 
       if (selectedRole === 'AUTHOR') {
-        router.push('/wizard');
+        router.push('/bridge/wizard');
       } else if (selectedRole === 'ADMIN') {
         router.push('/dashboard/civic-actions');
       } else {

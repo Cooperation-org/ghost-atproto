@@ -33,7 +33,7 @@ export default function LoginPage() {
 
       const role = res.user.role || 'USER';
       if (role === 'AUTHOR') {
-        router.push('/wizard');
+        router.push('/bridge/wizard');
         return;
       }
       if (role === 'ADMIN') {
