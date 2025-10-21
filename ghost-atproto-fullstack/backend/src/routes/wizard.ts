@@ -290,6 +290,57 @@ router.post('/complete', authenticateToken, async (req, res) => {
 });
 
 /**
+ * Skip wizard setup for authors who don't want to configure Ghost/Bluesky
+ * POST /api/wizard/skip
+ */
+router.post('/skip', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    
+    // Get user to check their role
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only allow authors to skip
+    if (user.role !== 'AUTHOR') {
+      return res.status(403).json({ 
+        error: 'Only authors can skip the wizard setup' 
+      });
+    }
+
+    // Update user to mark wizard as skipped (we'll use a special flag)
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        // We'll use a special value to indicate wizard was skipped
+        ghostUrl: 'SKIPPED',
+        ghostApiKey: 'SKIPPED',
+        blueskyHandle: 'SKIPPED',
+        blueskyPassword: 'SKIPPED',
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Wizard setup skipped successfully. You can configure Ghost and Bluesky later from your dashboard.',
+      skipped: true
+    });
+
+  } catch (error) {
+    console.error('Wizard skip error:', error);
+    return res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to skip wizard setup' 
+    });
+  }
+});
+
+/**
  * Get wizard status - check if user has completed setup
  * GET /api/wizard/status
  */
@@ -311,17 +362,20 @@ router.get('/status', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    const isSkipped = user.ghostUrl === 'SKIPPED';
     const isComplete = !!(
       user.ghostUrl && 
       user.ghostApiKey && 
       user.blueskyHandle && 
-      user.blueskyPassword
+      user.blueskyPassword &&
+      !isSkipped
     );
 
     return res.json({
       isComplete,
-      hasGhost: !!(user.ghostUrl && user.ghostApiKey),
-      hasBluesky: !!(user.blueskyHandle && user.blueskyPassword),
+      isSkipped,
+      hasGhost: !!(user.ghostUrl && user.ghostApiKey && !isSkipped),
+      hasBluesky: !!(user.blueskyHandle && user.blueskyPassword && !isSkipped),
     });
 
   } catch (error) {
