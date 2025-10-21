@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+import { isClient } from './hydration-utils';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002';
 
 export interface GhostValidationResponse {
   valid: boolean;
@@ -46,7 +48,7 @@ export interface WizardStatusResponse {
 
 class WizardApiClient {
   private getToken(): string | null {
-    if (typeof window === 'undefined') return null;
+    if (!isClient()) return null;
     return localStorage.getItem('token');
   }
 

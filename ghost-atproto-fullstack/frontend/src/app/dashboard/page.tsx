@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateForDisplay } from '@/lib/hydration-utils';
 import { useState, useEffect } from 'react';
 import {
   Grid,
@@ -227,7 +228,7 @@ export default function DashboardPage() {
                               </Typography>
                               {post.publishedAt && (
                                 <Typography variant="caption" color="text.secondary" display="block">
-                                  {new Date(post.publishedAt).toLocaleDateString('en-US', { 
+                                  {formatDateForDisplay(post.publishedAt, { 
                                     month: 'short', 
                                     day: 'numeric',
                                     year: 'numeric'

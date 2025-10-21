@@ -1,5 +1,6 @@
 'use client';
 
+import { isClient } from '@/lib/hydration-utils';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -42,7 +43,7 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
 
   useEffect(() => {
     // Update currentTab based on current path
-    if (typeof window !== 'undefined') {
+    if (isClient()) {
       const path = window.location.pathname;
       const tabs = ['/dashboard', '/dashboard/civic-actions'];
       const matched = tabs.find(t => path === t || path.startsWith(t + '/')) || false;

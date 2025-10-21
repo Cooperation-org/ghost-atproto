@@ -167,6 +167,45 @@ router.post('/validate-bluesky', authenticateToken, async (req, res) => {
 });
 
 /**
+ * Validate Ghost connection
+ * POST /api/wizard/validate-ghost
+ */
+router.post('/validate-ghost', authenticateToken, async (req, res) => {
+  try {
+    const { ghostUrl, ghostApiKey } = req.body;
+
+    if (!ghostUrl || !ghostApiKey) {
+      return res.status(400).json({ 
+        error: 'Ghost URL and Admin API key are required' 
+      });
+    }
+
+    // Import the validation function
+    const { validateGhostConnection } = await import('../server');
+    
+    const isValid = await validateGhostConnection(ghostUrl, ghostApiKey);
+    
+    if (isValid) {
+      res.json({ 
+        success: true, 
+        message: 'Ghost connection validated successfully' 
+      });
+    } else {
+      res.status(400).json({ 
+        success: false,
+        error: 'Invalid Ghost URL or API key. Please check your credentials.' 
+      });
+    }
+
+  } catch (error) {
+    console.error('Ghost validation error:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to validate Ghost connection' 
+    });
+  }
+});
+
+/**
  * Complete wizard setup - save all configuration
  * POST /api/wizard/complete
  */
@@ -227,76 +266,124 @@ router.post('/complete', authenticateToken, async (req, res) => {
     // Generate webhook URL for Ghost
     const webhookUrl = `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/ghost/webhook`;
 
-    // Trigger initial sync in the background only if Bluesky is configured
-    const syncResults = {
-      attempted: false,
+    // Validate Ghost connection and register webhook
+    let webhookRegistrationResult = {
       success: false,
-      syncedCount: 0,
+      webhookId: null as string | null,
       error: null as string | null
     };
 
-    if (!isBlueskySkipped) {
-      try {
-        // We'll trigger sync by making a request to our own sync endpoint
-        // This is a fire-and-forget operation
-        
-        // Get a fresh JWT token for the sync request
-        const token = jwt.sign(
-          { userId },
-          JWT_SECRET,
-          { expiresIn: '1h' }
-        );
-
-        // Trigger sync without waiting for it to complete
-        axios.post(
-          `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/sync`,
-          { limit: 50, force: false },
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        ).then((syncResponse: any) => {
-          console.log('✅ Initial sync completed:', syncResponse.data);
-          syncResults.attempted = true;
-          syncResults.success = true;
-          syncResults.syncedCount = syncResponse.data.syncedCount || 0;
-        }).catch((syncError: any) => {
-          console.error('⚠️ Initial sync failed:', syncError.message);
-          syncResults.attempted = true;
-          syncResults.error = syncError.message;
-        });
-
-      } catch (error) {
-        console.error('Failed to trigger initial sync:', error);
+    try {
+      // Import the validation and registration functions
+      const { validateGhostConnection, registerGhostWebhook } = await import('../server');
+      
+      // Validate Ghost connection
+      const isValidConnection = await validateGhostConnection(ghostUrl, ghostApiKey);
+      if (!isValidConnection) {
+        webhookRegistrationResult.error = 'Invalid Ghost URL or API key';
+      } else {
+        // Register webhook with Ghost
+        const webhookId = await registerGhostWebhook(ghostUrl, ghostApiKey, userId);
+        if (webhookId) {
+          // Update user with webhook ID
+          await prisma.user.update({
+            where: { id: userId },
+            data: { ghostWebhookId: webhookId }
+          });
+          webhookRegistrationResult.success = true;
+          webhookRegistrationResult.webhookId = webhookId;
+        } else {
+          webhookRegistrationResult.error = 'Failed to register webhook with Ghost';
+        }
       }
+    } catch (error) {
+      console.error('Webhook registration failed:', error);
+      webhookRegistrationResult.error = error instanceof Error ? error.message : 'Unknown error';
+    }
+
+    // Trigger initial sync in the background when Ghost is configured
+    const syncResults = {
+      attempted: false,
+      success: false,
+      localSynced: 0,
+      blueskySynced: 0,
+      error: null as string | null
+    };
+
+    // Always trigger sync when Ghost is configured (regardless of Bluesky)
+    try {
+      console.log('🔄 Triggering initial sync for Ghost posts...');
+      
+      // Get a fresh JWT token for the sync request
+      const token = jwt.sign(
+        { userId },
+        JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      // Trigger sync without waiting for it to complete
+      axios.post(
+        `${process.env.BACKEND_URL || 'http://localhost:5002'}/api/auth/sync`,
+        { limit: 50, force: false },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      ).then((syncResponse: any) => {
+        console.log('✅ Initial sync completed:', syncResponse.data);
+        syncResults.attempted = true;
+        syncResults.success = true;
+        syncResults.localSynced = syncResponse.data.summary?.localSynced || 0;
+        syncResults.blueskySynced = syncResponse.data.summary?.blueskySynced || 0;
+      }).catch((syncError: any) => {
+        console.error('⚠️ Initial sync failed:', syncError.message);
+        syncResults.attempted = true;
+        syncResults.error = syncError.message;
+      });
+
+    } catch (error) {
+      console.error('Failed to trigger initial sync:', error);
     }
 
     return res.json({
       success: true,
       user: updatedUser,
       webhookUrl,
-      message: isBlueskySkipped 
-        ? 'Setup complete! Ghost configuration saved. You can configure Bluesky later from your dashboard.'
-        : 'Setup complete! Initial sync has been triggered in the background.',
-      syncTriggered: !isBlueskySkipped,
+      webhookRegistration: webhookRegistrationResult,
+      message: webhookRegistrationResult.success 
+        ? 'Setup complete! Ghost webhook registered and initial sync has been triggered in the background. Your posts are now syncing automatically!'
+        : 'Setup complete! Ghost configuration saved and initial sync triggered, but webhook registration failed. Please check your Ghost URL and API key.',
+      syncTriggered: true,
       nextSteps: {
-        webhookInstructions: [
-          '1. Go to your Ghost Admin panel',
-          '2. Navigate to Settings → Integrations → Custom Integrations',
-          '3. Create a new custom integration named "CivicSky Bridge"',
-          '4. Add a webhook with the following URL:',
-          `   ${webhookUrl}`,
-          '5. Select "Post published" as the event',
-          `6. Add a custom header: X-User-ID = ${userId}`,
-          '7. Save the webhook',
-          isBlueskySkipped 
-            ? '8. ⚠️ Bluesky not configured - configure it later to enable auto-sync'
-            : autoSync 
-              ? '8. ✅ Auto-sync is ENABLED - new posts will automatically sync to Bluesky' 
-              : '8. ⚠️ Auto-sync is DISABLED - you can manually sync posts from your dashboard'
-        ]
+        webhookInstructions: webhookRegistrationResult.success 
+          ? [
+              '✅ Ghost webhook automatically registered!',
+              '✅ Auto-sync is now ENABLED for new posts.',
+              '✅ Initial sync has been triggered - your existing posts are being synced.',
+              isBlueskySkipped 
+                ? '📝 Posts are stored locally. Configure Bluesky later to also post to Bluesky.'
+                : autoSync 
+                  ? '🦋 Posts will automatically sync to both local storage and Bluesky' 
+                  : '📝 Posts are stored locally. Enable auto-sync in settings to also post to Bluesky.'
+            ]
+          : [
+              '1. Go to your Ghost Admin panel',
+              '2. Navigate to Settings → Integrations → Custom Integrations',
+              '3. Create a new custom integration named "Bluesky Publisher"',
+              '4. Add a webhook with the following URL:',
+              `   ${webhookUrl}`,
+              '5. Select "Post published" as the event',
+              `6. Add a custom header: X-User-ID = ${userId}`,
+              '7. Save the webhook',
+              '8. ✅ Initial sync has been triggered - your existing posts are being synced.',
+              isBlueskySkipped 
+                ? '9. 📝 Posts are stored locally. Configure Bluesky later to also post to Bluesky.'
+                : autoSync 
+                  ? '9. 🦋 Posts will automatically sync to both local storage and Bluesky' 
+                  : '9. 📝 Posts are stored locally. Enable auto-sync in settings to also post to Bluesky.'
+            ]
       }
     });
 

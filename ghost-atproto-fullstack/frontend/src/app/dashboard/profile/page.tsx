@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDate, formatDateTime } from '@/lib/hydration-utils';
 import { useState, useEffect } from 'react';
 import {
   Grid,
@@ -249,7 +250,7 @@ export default function ProfilePage() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : '-'}
+                        {formatDate(post.publishedAt)}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -315,7 +316,7 @@ export default function ProfilePage() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {new Date(log.createdAt).toLocaleString()}
+                        {formatDateTime(log.createdAt)}
                       </Typography>
                     </TableCell>
                   </TableRow>
