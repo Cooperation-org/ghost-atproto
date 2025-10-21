@@ -20,7 +20,7 @@ export function formatDate(dateString: string | Date | null | undefined): string
       day: 'numeric',
       timeZone: 'UTC'
     });
-  } catch (error) {
+  } catch {
     return '-';
   }
 }
@@ -42,7 +42,7 @@ export function formatDateTime(dateString: string | Date | null | undefined): st
       minute: '2-digit',
       timeZone: 'UTC'
     });
-  } catch (error) {
+  } catch {
     return '-';
   }
 }
@@ -89,7 +89,7 @@ export function formatDateForDisplay(dateString: string | Date | null | undefine
     };
     
     return date.toLocaleDateString('en-US', defaultOptions);
-  } catch (error) {
+  } catch {
     return '-';
   }
 }

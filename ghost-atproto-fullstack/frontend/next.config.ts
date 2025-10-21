@@ -13,10 +13,6 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  // Add polyfills for browser APIs
-  experimental: {
-    esmExternals: 'loose',
-  },
   // Ensure static assets are properly served
   trailingSlash: false,
   // Optimize static file serving

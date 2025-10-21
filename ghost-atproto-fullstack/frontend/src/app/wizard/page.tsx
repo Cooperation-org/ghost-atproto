@@ -63,7 +63,6 @@ export default function WizardPage() {
   const [webhookUrl, setWebhookUrl] = useState<string>('');
   const [webhookInstructions, setWebhookInstructions] = useState<string[]>([]);
   const [showWebhookInfo, setShowWebhookInfo] = useState(false);
-  const [success, setSuccess] = useState('');
 
   const handleNext = async () => {
     setError('');
@@ -841,7 +840,6 @@ export default function WizardPage() {
                       <IconButton 
                         onClick={() => {
                           navigator.clipboard.writeText(webhookUrl);
-                          setSuccess('Webhook URL copied to clipboard!');
                         }}
                         size="small"
                         sx={{ bgcolor: '#e3f2fd', '&:hover': { bgcolor: '#bbdefb' } }}
@@ -861,9 +859,9 @@ export default function WizardPage() {
                 <Typography variant="body2" component="div">
                   1. Go to your Ghost Admin panel<br/>
                   2. Navigate to <strong>Settings → Integrations</strong><br/>
-                  3. Click <strong>"Add custom integration"</strong><br/>
-                  4. Name it <strong>"Auto-Sync Bridge"</strong><br/>
-                  5. Click <strong>"Add webhook"</strong><br/>
+                  3. Click <strong>&quot;Add custom integration&quot;</strong><br/>
+                  4. Name it <strong>&quot;Auto-Sync Bridge&quot;</strong><br/>
+                  5. Click <strong>&quot;Add webhook&quot;</strong><br/>
                   6. Configure the webhook:<br/>
                   &nbsp;&nbsp;• <strong>Event:</strong> Post published<br/>
                   &nbsp;&nbsp;• <strong>URL:</strong> {webhookUrl}<br/>
