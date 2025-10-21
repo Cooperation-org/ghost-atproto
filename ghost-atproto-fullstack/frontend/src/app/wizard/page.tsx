@@ -50,6 +50,8 @@ export default function WizardPage() {
     newsletters: true,
   });
 
+  const [autoSync, setAutoSync] = useState(true);
+
   // Validation results
   const [ghostValidation, setGhostValidation] = useState<GhostValidationResponse | null>(null);
   const [blueskyValidation, setBlueskyValidation] = useState<BlueskyValidationResponse | null>(null);
@@ -108,7 +110,10 @@ export default function WizardPage() {
     if (activeStep === 1) {
       setLoading(true);
       try {
-        const result = await wizardApi.completeWizard(formData);
+        const result = await wizardApi.completeWizard({
+          ...formData,
+          autoSync
+        });
         setWebhookUrl(result.webhookUrl);
         setWebhookInstructions(result.nextSteps.webhookInstructions);
       } catch (err) {
@@ -366,6 +371,46 @@ export default function WizardPage() {
                     </Grid>
                   </Grid>
                 </FormGroup>
+              </Box>
+
+              {/* Auto-Sync Settings */}
+              <Box 
+                sx={{ 
+                  mt: 4, 
+                  p: 3, 
+                  bgcolor: '#e3f2fd', 
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: '#2196f3'
+                }}
+              >
+                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700, mb: 2.5, color: '#1976d2' }}>
+                  🔄 Auto-Sync Settings
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Checkbox 
+                      checked={autoSync} 
+                      onChange={(e) => setAutoSync(e.target.checked)}
+                      sx={{
+                        color: '#1976d2',
+                        '&.Mui-checked': {
+                          color: '#1976d2',
+                        },
+                      }}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                        Automatically sync new posts to Bluesky
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        When enabled, new posts published in Ghost will automatically be shared to Bluesky
+                      </Typography>
+                    </Box>
+                  }
+                />
               </Box>
 
               <Button

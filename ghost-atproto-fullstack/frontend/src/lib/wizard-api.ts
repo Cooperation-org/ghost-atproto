@@ -1,4 +1,19 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+// Determine API base URL based on environment
+const getApiBase = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // In production, use the same domain with /bridge prefix
+  if (process.env.NODE_ENV === 'production') {
+    return '/bridge';
+  }
+  
+  // In development, use localhost
+  return 'http://localhost:5001';
+};
+
+const API_BASE = getApiBase();
 
 export interface GhostValidationResponse {
   valid: boolean;
@@ -102,6 +117,7 @@ class WizardApiClient {
     blueskyHandle: string;
     blueskyPassword: string;
     name?: string;
+    autoSync?: boolean;
   }): Promise<WizardCompleteResponse> {
     return this.request<WizardCompleteResponse>('/api/wizard/complete', {
       method: 'POST',

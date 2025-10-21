@@ -413,6 +413,12 @@ app.post(
             throw new Error(`User ${userId} not found`);
           }
 
+          // Check if auto-sync is enabled for this user
+          if (!user.autoSync) {
+            console.log(`Auto-sync disabled for user ${userId}, skipping webhook processing`);
+            return;
+          }
+
           // Handle post events
           const postPayload = payload?.post?.current || payload?.post;
           if (postPayload && ghostEntityId) {

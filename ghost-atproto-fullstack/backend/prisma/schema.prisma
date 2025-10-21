@@ -40,6 +40,9 @@ model User {
   
   // NEW: Add Ghost Content API Key
   ghostContentApiKey String? @map("ghost_content_api_key")
+  
+  // Auto-sync settings
+  autoSync Boolean @default(true) @map("auto_sync")
 
   // Relations
   posts         Post[]

@@ -179,7 +179,8 @@ router.post('/complete', authenticateToken, async (req, res) => {
       ghostContentApiKey,
       blueskyHandle, 
       blueskyPassword,
-      name
+      name,
+      autoSync = true
     } = req.body;
 
     // Validate all required fields
@@ -199,6 +200,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
         ghostContentApiKey: ghostContentApiKey || undefined,
         blueskyHandle,
         blueskyPassword,
+        autoSync,
       },
       select: {
         id: true,
@@ -277,6 +279,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
           '5. Select "Post published" as the event',
           `6. Add a custom header: X-User-ID = ${userId}`,
           '7. Save the webhook',
+          autoSync ? '8. ✅ Auto-sync is ENABLED - new posts will automatically sync to Bluesky' : '8. ⚠️ Auto-sync is DISABLED - you can manually sync posts from your dashboard'
         ]
       }
     });
