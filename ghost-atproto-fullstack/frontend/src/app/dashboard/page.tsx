@@ -242,7 +242,7 @@ export default function DashboardPage() {
 
                       {/* View Link */}
                       <Button
-                        onClick={() => window.location.href = `/article/${post.id}`}
+                        onClick={() => window.location.href = `/bridge/article/${post.id}`}
                         fullWidth
                         variant="outlined"
                         sx={{ 
