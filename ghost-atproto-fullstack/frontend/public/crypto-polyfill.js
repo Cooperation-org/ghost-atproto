@@ -11,12 +11,12 @@ if (typeof window !== 'undefined') {
     
     // Create crypto object if it doesn't exist
     if (typeof crypto === 'undefined') {
-      (window as any).crypto = {};
+      window.crypto = {};
     }
     
     // Add randomUUID polyfill if not available
     if (typeof crypto.randomUUID !== 'function') {
-      crypto.randomUUID = function(): string {
+      crypto.randomUUID = function() {
         // More robust UUID v4 implementation
         try {
           // Try to use crypto.getRandomValues if available for better randomness

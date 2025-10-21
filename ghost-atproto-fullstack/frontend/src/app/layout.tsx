@@ -29,7 +29,7 @@ export default function RootLayout({
       <head>
         {/* Load crypto polyfill early to prevent crypto.randomUUID errors */}
         <Script
-          src="/bridge/crypto-polyfill.js"
+          src="/crypto-polyfill.js"
           strategy="beforeInteractive"
         />
       </head>
