@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDate, formatDateTime } from '@/lib/hydration-utils';
 import { useState, useEffect } from 'react';
 import {
   Grid,
@@ -136,11 +137,11 @@ export default function ProfilePage() {
           <Typography variant="body1" sx={{ mt: 1 }}>
             <strong>Email:</strong> {user?.email}
           </Typography>
-          <Typography variant="body1" color={user?.ghostUrl ? 'success.main' : 'error.main'} sx={{ mt: 1 }}>
-            <strong>Ghost Site:</strong> {user?.ghostUrl || 'Not configured'}
+          <Typography variant="body1" color={user?.ghostUrl && user.ghostUrl !== 'SKIPPED' ? 'success.main' : user?.ghostUrl === 'SKIPPED' ? 'warning.main' : 'error.main'} sx={{ mt: 1 }}>
+            <strong>Ghost Site:</strong> {user?.ghostUrl && user.ghostUrl !== 'SKIPPED' ? user.ghostUrl : user?.ghostUrl === 'SKIPPED' ? 'Skipped' : 'Not configured'}
           </Typography>
-          <Typography variant="body1" color={user?.blueskyHandle ? 'success.main' : 'error.main'} sx={{ mt: 1 }}>
-            <strong>Bluesky Handle:</strong> {user?.blueskyHandle || 'Not configured'}
+          <Typography variant="body1" color={user?.blueskyHandle && user.blueskyHandle !== 'SKIPPED' ? 'success.main' : user?.blueskyHandle === 'SKIPPED' ? 'warning.main' : 'error.main'} sx={{ mt: 1 }}>
+            <strong>Bluesky Handle:</strong> {user?.blueskyHandle && user.blueskyHandle !== 'SKIPPED' ? user.blueskyHandle : user?.blueskyHandle === 'SKIPPED' ? 'Skipped' : 'Not configured'}
           </Typography>
         </Box>
       </Paper>
@@ -249,7 +250,7 @@ export default function ProfilePage() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : '-'}
+                        {formatDate(post.publishedAt)}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -315,7 +316,7 @@ export default function ProfilePage() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {new Date(log.createdAt).toLocaleString()}
+                        {formatDateTime(log.createdAt)}
                       </Typography>
                     </TableCell>
                   </TableRow>

@@ -167,6 +167,45 @@ router.post('/validate-bluesky', authenticateToken, async (req, res) => {
 });
 
 /**
+ * Validate Ghost connection
+ * POST /api/wizard/validate-ghost
+ */
+router.post('/validate-ghost', authenticateToken, async (req, res) => {
+  try {
+    const { ghostUrl, ghostApiKey } = req.body;
+
+    if (!ghostUrl || !ghostApiKey) {
+      return res.status(400).json({ 
+        error: 'Ghost URL and Admin API key are required' 
+      });
+    }
+
+    // Import the validation function
+    const { validateGhostConnection } = await import('../server');
+    
+    const isValid = await validateGhostConnection(ghostUrl, ghostApiKey);
+    
+    if (isValid) {
+      res.json({ 
+        success: true, 
+        message: 'Ghost connection validated successfully' 
+      });
+    } else {
+      res.status(400).json({ 
+        success: false,
+        error: 'Invalid Ghost URL or API key. Please check your credentials.' 
+      });
+    }
+
+  } catch (error) {
+    console.error('Ghost validation error:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to validate Ghost connection' 
+    });
+  }
+});
+
+/**
  * Complete wizard setup - save all configuration
  * POST /api/wizard/complete
  */
@@ -179,13 +218,24 @@ router.post('/complete', authenticateToken, async (req, res) => {
       ghostContentApiKey,
       blueskyHandle, 
       blueskyPassword,
-      name
+      name,
+      autoSync = true
     } = req.body;
 
-    // Validate all required fields
-    if (!ghostUrl || !ghostApiKey || !blueskyHandle || !blueskyPassword) {
+    // Validate required fields - Ghost is always required, Bluesky can be skipped
+    if (!ghostUrl || !ghostApiKey) {
       return res.status(400).json({ 
-        error: 'Ghost URL, Admin API key, Bluesky handle, and password are required' 
+        error: 'Ghost URL and Admin API key are required' 
+      });
+    }
+
+    // Check if Bluesky is being skipped
+    const isBlueskySkipped = blueskyHandle === 'SKIPPED' || blueskyPassword === 'SKIPPED';
+    
+    // If not skipped, validate Bluesky fields
+    if (!isBlueskySkipped && (!blueskyHandle || !blueskyPassword)) {
+      return res.status(400).json({ 
+        error: 'Bluesky handle and password are required, or mark as SKIPPED' 
       });
     }
 
@@ -199,6 +249,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
         ghostContentApiKey: ghostContentApiKey || undefined,
         blueskyHandle,
         blueskyPassword,
+        autoSync,
       },
       select: {
         id: true,
@@ -213,21 +264,55 @@ router.post('/complete', authenticateToken, async (req, res) => {
     });
 
     // Generate webhook URL for Ghost
-    const webhookUrl = `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/ghost/webhook`;
+    const webhookUrl = `${process.env.BACKEND_URL || 'http://204.236.176.29'}/api/ghost/webhook`;
 
-    // Trigger initial sync in the background
-    // Import the sync function from server or create a sync service
-    // For now, we'll make an internal call to the sync endpoint
-    const syncResults = {
-      attempted: false,
+    // Validate Ghost connection and register webhook
+    let webhookRegistrationResult = {
       success: false,
-      syncedCount: 0,
+      webhookId: null as string | null,
       error: null as string | null
     };
 
     try {
-      // We'll trigger sync by making a request to our own sync endpoint
-      // This is a fire-and-forget operation
+      // Import the validation and registration functions
+      const { validateGhostConnection, registerGhostWebhook } = await import('../server');
+      
+      // Validate Ghost connection
+      const isValidConnection = await validateGhostConnection(ghostUrl, ghostApiKey);
+      if (!isValidConnection) {
+        webhookRegistrationResult.error = 'Invalid Ghost URL or API key';
+      } else {
+        // Register webhook with Ghost
+        const webhookId = await registerGhostWebhook(ghostUrl, ghostApiKey, userId);
+        if (webhookId) {
+          // Update user with webhook ID
+          await prisma.user.update({
+            where: { id: userId },
+            data: { ghostWebhookId: webhookId }
+          });
+          webhookRegistrationResult.success = true;
+          webhookRegistrationResult.webhookId = webhookId;
+        } else {
+          webhookRegistrationResult.error = 'Failed to register webhook with Ghost';
+        }
+      }
+    } catch (error) {
+      console.error('Webhook registration failed:', error);
+      webhookRegistrationResult.error = error instanceof Error ? error.message : 'Unknown error';
+    }
+
+    // Trigger initial sync in the background when Ghost is configured
+    const syncResults = {
+      attempted: false,
+      success: false,
+      localSynced: 0,
+      blueskySynced: 0,
+      error: null as string | null
+    };
+
+    // Always trigger sync when Ghost is configured (regardless of Bluesky)
+    try {
+      console.log('🔄 Triggering initial sync for Ghost posts...');
       
       // Get a fresh JWT token for the sync request
       const token = jwt.sign(
@@ -238,7 +323,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
 
       // Trigger sync without waiting for it to complete
       axios.post(
-        `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/sync`,
+        `${process.env.BACKEND_URL || 'http://204.236.176.29'}/api/auth/sync`,
         { limit: 50, force: false },
         {
           headers: {
@@ -250,7 +335,8 @@ router.post('/complete', authenticateToken, async (req, res) => {
         console.log('✅ Initial sync completed:', syncResponse.data);
         syncResults.attempted = true;
         syncResults.success = true;
-        syncResults.syncedCount = syncResponse.data.syncedCount || 0;
+        syncResults.localSynced = syncResponse.data.summary?.localSynced || 0;
+        syncResults.blueskySynced = syncResponse.data.summary?.blueskySynced || 0;
       }).catch((syncError: any) => {
         console.error('⚠️ Initial sync failed:', syncError.message);
         syncResults.attempted = true;
@@ -265,19 +351,39 @@ router.post('/complete', authenticateToken, async (req, res) => {
       success: true,
       user: updatedUser,
       webhookUrl,
-      message: 'Setup complete! Initial sync has been triggered in the background.',
+      webhookRegistration: webhookRegistrationResult,
+      message: webhookRegistrationResult.success 
+        ? 'Setup complete! Ghost webhook registered and initial sync has been triggered in the background. Your posts are now syncing automatically!'
+        : 'Setup complete! Ghost configuration saved and initial sync triggered, but webhook registration failed. Please check your Ghost URL and API key.',
       syncTriggered: true,
       nextSteps: {
-        webhookInstructions: [
-          '1. Go to your Ghost Admin panel',
-          '2. Navigate to Settings → Integrations → Custom Integrations',
-          '3. Create a new custom integration named "CivicSky Bridge"',
-          '4. Add a webhook with the following URL:',
-          `   ${webhookUrl}`,
-          '5. Select "Post published" as the event',
-          `6. Add a custom header: X-User-ID = ${userId}`,
-          '7. Save the webhook',
-        ]
+        webhookInstructions: webhookRegistrationResult.success 
+          ? [
+              '✅ Ghost webhook automatically registered!',
+              '✅ Auto-sync is now ENABLED for new posts.',
+              '✅ Initial sync has been triggered - your existing posts are being synced.',
+              isBlueskySkipped 
+                ? '📝 Posts are stored locally. Configure Bluesky later to also post to Bluesky.'
+                : autoSync 
+                  ? '🦋 Posts will automatically sync to both local storage and Bluesky' 
+                  : '📝 Posts are stored locally. Enable auto-sync in settings to also post to Bluesky.'
+            ]
+          : [
+              '1. Go to your Ghost Admin panel',
+              '2. Navigate to Settings → Integrations → Custom Integrations',
+              '3. Create a new custom integration named "Bluesky Publisher"',
+              '4. Add a webhook with the following URL:',
+              `   ${webhookUrl}`,
+              '5. Select "Post published" as the event',
+              `6. Add a custom header: X-User-ID = ${userId}`,
+              '7. Save the webhook',
+              '8. ✅ Initial sync has been triggered - your existing posts are being synced.',
+              isBlueskySkipped 
+                ? '9. 📝 Posts are stored locally. Configure Bluesky later to also post to Bluesky.'
+                : autoSync 
+                  ? '9. 🦋 Posts will automatically sync to both local storage and Bluesky' 
+                  : '9. 📝 Posts are stored locally. Enable auto-sync in settings to also post to Bluesky.'
+            ]
       }
     });
 
@@ -314,13 +420,11 @@ router.post('/skip', authenticateToken, async (req, res) => {
       });
     }
 
-    // Update user to mark wizard as skipped (we'll use a special flag)
+    // Update user to mark Bluesky as skipped (only skip Bluesky, not Ghost)
     await prisma.user.update({
       where: { id: userId },
       data: {
-        // We'll use a special value to indicate wizard was skipped
-        ghostUrl: 'SKIPPED',
-        ghostApiKey: 'SKIPPED',
+        // Only mark Bluesky as skipped, leave Ghost fields as they are
         blueskyHandle: 'SKIPPED',
         blueskyPassword: 'SKIPPED',
       }
@@ -328,7 +432,7 @@ router.post('/skip', authenticateToken, async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Wizard setup skipped successfully. You can configure Ghost and Bluesky later from your dashboard.',
+      message: 'Bluesky setup skipped successfully. You can configure Bluesky later from your dashboard.',
       skipped: true
     });
 
@@ -362,20 +466,24 @@ router.get('/status', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const isSkipped = user.ghostUrl === 'SKIPPED';
+    const isBlueskySkipped = user.blueskyHandle === 'SKIPPED';
+    const isGhostSkipped = user.ghostUrl === 'SKIPPED';
     const isComplete = !!(
       user.ghostUrl && 
       user.ghostApiKey && 
       user.blueskyHandle && 
       user.blueskyPassword &&
-      !isSkipped
+      !isBlueskySkipped &&
+      !isGhostSkipped
     );
 
     return res.json({
       isComplete,
-      isSkipped,
-      hasGhost: !!(user.ghostUrl && user.ghostApiKey && !isSkipped),
-      hasBluesky: !!(user.blueskyHandle && user.blueskyPassword && !isSkipped),
+      isSkipped: isBlueskySkipped || isGhostSkipped,
+      hasGhost: !!(user.ghostUrl && user.ghostApiKey && !isGhostSkipped),
+      hasBluesky: !!(user.blueskyHandle && user.blueskyPassword && !isBlueskySkipped),
+      isBlueskySkipped,
+      isGhostSkipped,
     });
 
   } catch (error) {

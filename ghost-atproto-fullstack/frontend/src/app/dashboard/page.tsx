@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateForDisplay } from '@/lib/hydration-utils';
 import { useState, useEffect } from 'react';
 import {
   Grid,
@@ -89,20 +90,6 @@ export default function DashboardPage() {
           <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
             Connect your Ghost site to start syncing articles to Bluesky automatically
           </Typography>
-          <Button 
-            variant="contained" 
-            size="large"
-            onClick={() => window.location.href = '/bridge/wizard'}
-            sx={{ 
-              textTransform: 'none',
-              px: 4,
-              py: 1.5,
-              borderRadius: 2,
-              fontWeight: 600
-            }}
-          >
-            Setup Your Connection
-          </Button>
         </Paper>
       ) : (
         <Grid container spacing={4}>
@@ -241,7 +228,7 @@ export default function DashboardPage() {
                               </Typography>
                               {post.publishedAt && (
                                 <Typography variant="caption" color="text.secondary" display="block">
-                                  {new Date(post.publishedAt).toLocaleDateString('en-US', { 
+                                  {formatDateForDisplay(post.publishedAt, { 
                                     month: 'short', 
                                     day: 'numeric',
                                     year: 'numeric'

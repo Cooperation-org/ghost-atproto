@@ -1,3 +1,4 @@
+import { isClient } from './hydration-utils';
 import { User, Post, SyncLog, LoginResponse, ApiError } from './types';
 
 export interface CivicActionDto {
@@ -11,14 +12,14 @@ export interface CivicActionDto {
   imageUrl?: string | null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002';
 
 class ApiClient {
   private token: string | null = null;
 
   constructor() {
     // Load token from localStorage on client side
-    if (typeof window !== 'undefined') {
+    if (isClient()) {
       this.token = localStorage.getItem('token');
     }
   }
@@ -64,7 +65,7 @@ class ApiClient {
     });
 
     this.token = data.token;
-    if (typeof window !== 'undefined') {
+    if (isClient()) {
       localStorage.setItem('token', data.token);
     }
 
@@ -78,7 +79,7 @@ class ApiClient {
     });
 
     this.token = data.token;
-    if (typeof window !== 'undefined') {
+    if (isClient()) {
       localStorage.setItem('token', data.token);
     }
 
@@ -88,7 +89,7 @@ class ApiClient {
   async logout(): Promise<void> {
     await this.request('/api/auth/logout', { method: 'POST' });
     this.token = null;
-    if (typeof window !== 'undefined') {
+    if (isClient()) {
       localStorage.removeItem('token');
     }
   }
