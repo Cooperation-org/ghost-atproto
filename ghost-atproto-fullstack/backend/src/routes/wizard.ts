@@ -183,10 +183,20 @@ router.post('/complete', authenticateToken, async (req, res) => {
       autoSync = true
     } = req.body;
 
-    // Validate all required fields
-    if (!ghostUrl || !ghostApiKey || !blueskyHandle || !blueskyPassword) {
+    // Validate required fields - Ghost is always required, Bluesky can be skipped
+    if (!ghostUrl || !ghostApiKey) {
       return res.status(400).json({ 
-        error: 'Ghost URL, Admin API key, Bluesky handle, and password are required' 
+        error: 'Ghost URL and Admin API key are required' 
+      });
+    }
+
+    // Check if Bluesky is being skipped
+    const isBlueskySkipped = blueskyHandle === 'SKIPPED' || blueskyPassword === 'SKIPPED';
+    
+    // If not skipped, validate Bluesky fields
+    if (!isBlueskySkipped && (!blueskyHandle || !blueskyPassword)) {
+      return res.status(400).json({ 
+        error: 'Bluesky handle and password are required, or mark as SKIPPED' 
       });
     }
 
@@ -217,9 +227,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
     // Generate webhook URL for Ghost
     const webhookUrl = `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/ghost/webhook`;
 
-    // Trigger initial sync in the background
-    // Import the sync function from server or create a sync service
-    // For now, we'll make an internal call to the sync endpoint
+    // Trigger initial sync in the background only if Bluesky is configured
     const syncResults = {
       attempted: false,
       success: false,
@@ -227,48 +235,52 @@ router.post('/complete', authenticateToken, async (req, res) => {
       error: null as string | null
     };
 
-    try {
-      // We'll trigger sync by making a request to our own sync endpoint
-      // This is a fire-and-forget operation
-      
-      // Get a fresh JWT token for the sync request
-      const token = jwt.sign(
-        { userId },
-        JWT_SECRET,
-        { expiresIn: '1h' }
-      );
+    if (!isBlueskySkipped) {
+      try {
+        // We'll trigger sync by making a request to our own sync endpoint
+        // This is a fire-and-forget operation
+        
+        // Get a fresh JWT token for the sync request
+        const token = jwt.sign(
+          { userId },
+          JWT_SECRET,
+          { expiresIn: '1h' }
+        );
 
-      // Trigger sync without waiting for it to complete
-      axios.post(
-        `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/sync`,
-        { limit: 50, force: false },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+        // Trigger sync without waiting for it to complete
+        axios.post(
+          `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/sync`,
+          { limit: 50, force: false },
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
           }
-        }
-      ).then((syncResponse: any) => {
-        console.log('✅ Initial sync completed:', syncResponse.data);
-        syncResults.attempted = true;
-        syncResults.success = true;
-        syncResults.syncedCount = syncResponse.data.syncedCount || 0;
-      }).catch((syncError: any) => {
-        console.error('⚠️ Initial sync failed:', syncError.message);
-        syncResults.attempted = true;
-        syncResults.error = syncError.message;
-      });
+        ).then((syncResponse: any) => {
+          console.log('✅ Initial sync completed:', syncResponse.data);
+          syncResults.attempted = true;
+          syncResults.success = true;
+          syncResults.syncedCount = syncResponse.data.syncedCount || 0;
+        }).catch((syncError: any) => {
+          console.error('⚠️ Initial sync failed:', syncError.message);
+          syncResults.attempted = true;
+          syncResults.error = syncError.message;
+        });
 
-    } catch (error) {
-      console.error('Failed to trigger initial sync:', error);
+      } catch (error) {
+        console.error('Failed to trigger initial sync:', error);
+      }
     }
 
     return res.json({
       success: true,
       user: updatedUser,
       webhookUrl,
-      message: 'Setup complete! Initial sync has been triggered in the background.',
-      syncTriggered: true,
+      message: isBlueskySkipped 
+        ? 'Setup complete! Ghost configuration saved. You can configure Bluesky later from your dashboard.'
+        : 'Setup complete! Initial sync has been triggered in the background.',
+      syncTriggered: !isBlueskySkipped,
       nextSteps: {
         webhookInstructions: [
           '1. Go to your Ghost Admin panel',
@@ -279,7 +291,11 @@ router.post('/complete', authenticateToken, async (req, res) => {
           '5. Select "Post published" as the event',
           `6. Add a custom header: X-User-ID = ${userId}`,
           '7. Save the webhook',
-          autoSync ? '8. ✅ Auto-sync is ENABLED - new posts will automatically sync to Bluesky' : '8. ⚠️ Auto-sync is DISABLED - you can manually sync posts from your dashboard'
+          isBlueskySkipped 
+            ? '8. ⚠️ Bluesky not configured - configure it later to enable auto-sync'
+            : autoSync 
+              ? '8. ✅ Auto-sync is ENABLED - new posts will automatically sync to Bluesky' 
+              : '8. ⚠️ Auto-sync is DISABLED - you can manually sync posts from your dashboard'
         ]
       }
     });
@@ -317,13 +333,11 @@ router.post('/skip', authenticateToken, async (req, res) => {
       });
     }
 
-    // Update user to mark wizard as skipped (we'll use a special flag)
+    // Update user to mark Bluesky as skipped (only skip Bluesky, not Ghost)
     await prisma.user.update({
       where: { id: userId },
       data: {
-        // We'll use a special value to indicate wizard was skipped
-        ghostUrl: 'SKIPPED',
-        ghostApiKey: 'SKIPPED',
+        // Only mark Bluesky as skipped, leave Ghost fields as they are
         blueskyHandle: 'SKIPPED',
         blueskyPassword: 'SKIPPED',
       }
@@ -331,7 +345,7 @@ router.post('/skip', authenticateToken, async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Wizard setup skipped successfully. You can configure Ghost and Bluesky later from your dashboard.',
+      message: 'Bluesky setup skipped successfully. You can configure Bluesky later from your dashboard.',
       skipped: true
     });
 
@@ -365,20 +379,24 @@ router.get('/status', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const isSkipped = user.ghostUrl === 'SKIPPED';
+    const isBlueskySkipped = user.blueskyHandle === 'SKIPPED';
+    const isGhostSkipped = user.ghostUrl === 'SKIPPED';
     const isComplete = !!(
       user.ghostUrl && 
       user.ghostApiKey && 
       user.blueskyHandle && 
       user.blueskyPassword &&
-      !isSkipped
+      !isBlueskySkipped &&
+      !isGhostSkipped
     );
 
     return res.json({
       isComplete,
-      isSkipped,
-      hasGhost: !!(user.ghostUrl && user.ghostApiKey && !isSkipped),
-      hasBluesky: !!(user.blueskyHandle && user.blueskyPassword && !isSkipped),
+      isSkipped: isBlueskySkipped || isGhostSkipped,
+      hasGhost: !!(user.ghostUrl && user.ghostApiKey && !isGhostSkipped),
+      hasBluesky: !!(user.blueskyHandle && user.blueskyPassword && !isBlueskySkipped),
+      isBlueskySkipped,
+      isGhostSkipped,
     });
 
   } catch (error) {

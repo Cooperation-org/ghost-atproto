@@ -40,6 +40,8 @@ export interface WizardStatusResponse {
   isSkipped: boolean;
   hasGhost: boolean;
   hasBluesky: boolean;
+  isBlueskySkipped: boolean;
+  isGhostSkipped: boolean;
 }
 
 class WizardApiClient {

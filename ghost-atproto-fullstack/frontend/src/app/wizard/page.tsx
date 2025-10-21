@@ -144,11 +144,33 @@ export default function WizardPage() {
     setError('');
 
     try {
-      const result = await wizardApi.skipWizard();
-      if (result.success) {
-        router.push('/dashboard');
+      // If we have Ghost configuration, complete the wizard with Ghost only
+      if (formData.ghostUrl && formData.ghostApiKey) {
+        const result = await wizardApi.completeWizard({
+          ghostUrl: formData.ghostUrl,
+          ghostApiKey: formData.ghostApiKey,
+          ghostContentApiKey: formData.ghostContentApiKey,
+          blueskyHandle: 'SKIPPED',
+          blueskyPassword: 'SKIPPED',
+          name: formData.name,
+          autoSync: autoSync,
+        });
+        
+        if (result.success) {
+          setWebhookUrl(result.webhookUrl);
+          setWebhookInstructions(result.nextSteps.webhookInstructions);
+          router.push('/dashboard');
+        } else {
+          setError('Failed to complete setup with Ghost configuration');
+        }
       } else {
-        setError('Failed to skip wizard setup');
+        // If no Ghost configuration, skip everything
+        const result = await wizardApi.skipWizard();
+        if (result.success) {
+          router.push('/dashboard');
+        } else {
+          setError('Failed to skip wizard setup');
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to skip wizard setup';
