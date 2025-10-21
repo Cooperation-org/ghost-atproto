@@ -2,6 +2,8 @@
  * Utility functions to prevent hydration mismatches
  */
 
+import { getRandomUUID } from './crypto-polyfill';
+
 /**
  * Format date consistently for both server and client
  * Uses UTC to avoid timezone differences
@@ -60,6 +62,14 @@ export function isClient(): boolean {
 let idCounter = 0;
 export function getStableId(): string {
   return `id-${++idCounter}`;
+}
+
+/**
+ * Get a random UUID using crypto.randomUUID with fallback
+ * Use this for generating unique identifiers
+ */
+export function getRandomId(): string {
+  return getRandomUUID();
 }
 
 /**
