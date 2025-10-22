@@ -11,9 +11,14 @@ import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import passport from 'passport';
 import atprotoRoutes from './routes/atproto';
 import wizardRoutes from './routes/wizard';
+import oauthRoutes from './routes/oauth';
 import axios from 'axios';
+import { setupGoogleOAuth } from './lib/google-oauth';
+import { setupBlueskyOAuth } from './lib/bluesky-oauth';
+import { validateOAuthConfig } from './lib/oauth-config';
 
 // Load environment variables
 dotenv.config();
@@ -33,9 +38,11 @@ app.use(morgan('dev'));
 
 app.use(cors({
   origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
+    process.env.FRONTEND_URL || 'http://127.0.0.1:3000',
+    'http://localhost:3000',
     'http://localhost:3001', // Allow port 3001 as well
-    'http://localhost:3000'
+    'http://127.0.0.1:3000', // RFC 8252 requirement for OAuth
+    'http://127.0.0.1:3001'
   ],
   credentials: true
 }));
@@ -51,6 +58,17 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
+
+// Initialize Passport for OAuth
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Setup OAuth providers
+setupGoogleOAuth();
+setupBlueskyOAuth(); // Full AT Protocol OAuth following official docs
+
+// Validate OAuth configuration
+validateOAuthConfig();
 
 // Serve static files (for client-metadata.json)
 app.use(express.static(path.join(__dirname, '../public')));
@@ -528,6 +546,7 @@ app.use(express.json({ limit: '10mb' }));
 // Routes
 app.use('/api/atproto', atprotoRoutes);
 app.use('/api/wizard', wizardRoutes);
+app.use('/api/auth', oauthRoutes);
 
 
 app.get('/api/health', (req, res) => {
@@ -548,6 +567,11 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Check if user has a password (OAuth users might not have one)
+    if (!user.password) {
+      return res.status(401).json({ error: 'This account uses OAuth. Please sign in with Google or Bluesky.' });
     }
 
     // Verify password
