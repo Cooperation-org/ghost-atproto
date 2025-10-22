@@ -77,7 +77,7 @@ export default function LoginPage() {
 
       const role = res.user.role || 'USER';
       if (role === 'AUTHOR') {
-        router.push('/bridge/wizard');
+        router.push('/wizard');
         return;
       }
       if (role === 'ADMIN') {

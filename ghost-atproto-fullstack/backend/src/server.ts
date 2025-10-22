@@ -90,6 +90,103 @@ function authenticateToken(req: any, res: any, next: any) {
   }
 }
 
+// Helper: Register webhook with Ghost
+export async function registerGhostWebhook(ghostUrl: string, ghostApiKey: string, userId: string): Promise<string | null> {
+  try {
+    const [keyId, keySecret] = ghostApiKey.split(':');
+    if (!keyId || !keySecret) {
+      throw new Error('Invalid Ghost API key format');
+    }
+
+    // Create JWT token for Ghost Admin API
+    const token = jwt.sign({}, Buffer.from(keySecret, 'hex'), {
+      keyid: keyId,
+      algorithm: 'HS256',
+      expiresIn: '5m',
+      audience: `/admin/`
+    });
+
+    const webhookUrl = `${process.env.BACKEND_URL || 'http://204.236.176.29'}/api/ghost/webhook`;
+    
+    // Check if webhook already exists
+    const existingWebhooks = await axios.get(`${ghostUrl}/ghost/api/admin/webhooks/`, {
+      headers: {
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v6.4'
+      }
+    });
+
+    // Look for existing webhook with our URL
+    const existingWebhook = existingWebhooks.data.webhooks?.find((webhook: any) => 
+      webhook.target_url === webhookUrl && 
+      webhook.event === 'post.published'
+    );
+
+    if (existingWebhook) {
+      console.log(`✅ Webhook already exists: ${existingWebhook.id}`);
+      return existingWebhook.id;
+    }
+
+    // Create new webhook
+    const webhookData = {
+      webhook: {
+        event: 'post.published',
+        target_url: webhookUrl,
+        name: 'Bluesky Publisher',
+        secret: process.env.GHOST_WEBHOOK_SECRET || '',
+        integration_id: null
+      }
+    };
+
+    const response = await axios.post(`${ghostUrl}/ghost/api/admin/webhooks/`, webhookData, {
+      headers: {
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v6.4',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const webhookId = response.data.webhooks?.[0]?.id;
+    console.log(`✅ Webhook registered: ${webhookId}`);
+    return webhookId;
+
+  } catch (error) {
+    console.error('Failed to register Ghost webhook:', error);
+    return null;
+  }
+}
+
+// Helper: Validate Ghost connection
+export async function validateGhostConnection(ghostUrl: string, ghostApiKey: string): Promise<boolean> {
+  try {
+    const [keyId, keySecret] = ghostApiKey.split(':');
+    if (!keyId || !keySecret) {
+      return false;
+    }
+
+    // Create JWT token for Ghost Admin API
+    const token = jwt.sign({}, Buffer.from(keySecret, 'hex'), {
+      keyid: keyId,
+      algorithm: 'HS256',
+      expiresIn: '5m',
+      audience: `/admin/`
+    });
+
+    // Test connection by fetching site info
+    const response = await axios.get(`${ghostUrl}/ghost/api/admin/site/`, {
+      headers: {
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v6.4'
+      }
+    });
+
+    return response.status === 200;
+  } catch (error) {
+    console.error('Ghost connection validation failed:', error);
+    return false;
+  }
+}
+
 // Helper: Get Bluesky agent for user (hybrid: OAuth or app password)
 async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
   const user = await prisma.user.findUnique({
@@ -164,7 +261,156 @@ async function postToBluesky(agent: BskyAgent, title: string, content?: string, 
   });
 }
 
-// Helper: Sync Ghost posts to Bluesky
+// Helper: Sync Ghost posts locally (without Bluesky requirement)
+async function syncGhostPostsLocally(
+  userId: string,
+  ghostUrl: string,
+  ghostApiKey: string,
+  limit: number = 50,
+  force: boolean = false
+) {
+  try {
+    console.log(`\n🔄 Starting local sync for ${ghostUrl} (user: ${userId})...`);
+
+    // Fetch Ghost posts using Admin API
+    const [keyId, keySecret] = ghostApiKey.split(':');
+    if (!keyId || !keySecret) {
+      throw new Error('Invalid Ghost API key format');
+    }
+
+    // Create JWT token for Ghost Admin API
+    const token = jwt.sign({}, Buffer.from(keySecret, 'hex'), {
+      keyid: keyId,
+      algorithm: 'HS256',
+      expiresIn: '5m',
+      audience: `/admin/`
+    });
+
+    const ghostApiUrl = `${ghostUrl}/ghost/api/admin/posts/`;
+    const response = await axios.get(ghostApiUrl, {
+      headers: {
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v6.4'
+      },
+      params: {
+        limit,
+        filter: 'status:published',
+        order: 'published_at DESC',
+        fields: 'id,title,slug,excerpt,custom_excerpt,html,plaintext,mobiledoc,lexical,feature_image,url,published_at',
+        formats: 'html,plaintext,mobiledoc'
+      }
+    });
+
+    const posts = response.data.posts || [];
+    console.log(`📖 Found ${posts.length} posts`);
+
+    let syncedCount = 0;
+    let skippedCount = 0;
+
+    // Process each post
+    for (const post of posts) {
+      try {
+        const ghostId = String(post.id);
+        const title = post.title || 'Untitled';
+        const content = post.html || post.plaintext || '';
+        const excerpt = post.excerpt || post.custom_excerpt || '';
+        const featureImage = post.feature_image || null;
+        const slug = post.slug || `ghost-${ghostId}`;
+        const ghostSlug = post.slug || null;
+        const ghostUrl = post.url || null;
+        const publishedAt = post.published_at ? new Date(post.published_at) : new Date();
+
+        // Check if post already exists (unless force is true)
+        if (!force) {
+          const existingPost = await prisma.post.findUnique({
+            where: { ghostId }
+          });
+          
+          if (existingPost) {
+            console.log(`⏭️  Skipping existing post: ${title}`);
+            skippedCount++;
+            continue;
+          }
+        }
+
+        // Upsert post in database
+        const dbPost = await prisma.post.upsert({
+          where: { ghostId },
+          update: {
+            title,
+            content,
+            excerpt,
+            featureImage,
+            slug,
+            status: 'published',
+            publishedAt,
+            ghostSlug: ghostSlug || undefined,
+            ghostUrl: ghostUrl || undefined,
+          },
+          create: {
+            title,
+            content,
+            excerpt,
+            featureImage,
+            slug,
+            status: 'published',
+            publishedAt,
+            ghostId,
+            ghostSlug: ghostSlug || undefined,
+            ghostUrl: ghostUrl || undefined,
+            userId: userId,
+          }
+        });
+
+        // Create sync log for local storage
+        await prisma.syncLog.create({
+          data: {
+            action: 'store',
+            status: 'success',
+            source: 'ghost',
+            target: 'local',
+            ghostId,
+            postId: dbPost.id,
+            userId: userId
+          }
+        });
+
+        console.log(`✅ Stored locally: ${title}`);
+        syncedCount++;
+
+      } catch (error) {
+        console.error(`❌ Failed to process post ${post.id}:`, error);
+        await prisma.syncLog.create({
+          data: {
+            action: 'store',
+            status: 'error',
+            source: 'ghost',
+            target: 'local',
+            ghostId: String(post.id),
+            error: error instanceof Error ? error.message : 'Unknown error',
+            userId: userId
+          }
+        });
+      }
+    }
+
+    console.log(`\n📊 Local sync completed:`);
+    console.log(`   ✅ Synced: ${syncedCount} posts`);
+    console.log(`   ⏭️  Skipped: ${skippedCount} posts`);
+
+    return {
+      synced: syncedCount,
+      skipped: skippedCount,
+      total: posts.length
+    };
+
+  } catch (error) {
+    console.error('❌ Local sync failed:', error);
+    throw error;
+  }
+}
+
+// Helper: Sync Ghost posts to Bluesky (optional)
 async function syncGhostToBluesky(
   userId: string,
   ghostUrl: string,
@@ -207,7 +453,7 @@ async function syncGhostToBluesky(
     const response = await axios.get(ghostApiUrl, {
       headers: {
         'Authorization': `Ghost ${token}`,
-        'Accept-Version': 'v5.0'
+        'Accept-Version': 'v6.4'
       },
       params: {
         limit,
@@ -431,6 +677,23 @@ app.post(
             throw new Error(`User ${userId} not found`);
           }
 
+          // Check if auto-sync is enabled for this user
+          if (!user.autoSync) {
+            console.log(`Auto-sync disabled for user ${userId}, skipping webhook processing`);
+            return;
+          }
+
+          // Check if user has valid Ghost configuration
+          if (!user.ghostUrl || !user.ghostApiKey || 
+              user.ghostUrl === 'SKIPPED' || user.ghostApiKey === 'SKIPPED' ||
+              user.ghostUrl.trim() === '' || user.ghostApiKey.trim() === '') {
+            console.log(`User ${userId} has no valid Ghost configuration, skipping webhook processing`);
+            return;
+          }
+
+          // Note: Bluesky configuration is optional for webhook processing
+          // Posts will be stored locally regardless of Bluesky connection
+
           // Handle post events
           const postPayload = payload?.post?.current || payload?.post;
           if (postPayload && ghostEntityId) {
@@ -475,7 +738,7 @@ app.post(
                 }
               });
 
-              // Post to Bluesky
+              // Post to Bluesky (optional - only if user has connected their account)
               const agent = await getAgentForUser(userId);
               if (agent) {
                 try {
@@ -522,7 +785,20 @@ app.post(
                   });
                 }
               } else {
-                console.warn('No Bluesky credentials configured for user', userId);
+                console.log('📝 Post stored locally (Bluesky not connected)');
+                
+                // Create a sync log for local storage
+                await prisma.syncLog.create({
+                  data: {
+                    action: 'store',
+                    status: 'success',
+                    source: 'ghost',
+                    target: 'local',
+                    ghostId: ghostEntityId,
+                    postId: post.id,
+                    userId: userId
+                  }
+                });
               }
             }
           }
@@ -821,7 +1097,7 @@ app.get('/api/auth/profile/stats', authenticateToken, async (req, res) => {
   }
 });
 
-// Manual sync endpoint - sync Ghost posts to Bluesky
+// Manual sync endpoint - sync Ghost posts locally and optionally to Bluesky
 app.post('/api/auth/sync', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
@@ -835,7 +1111,8 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
         ghostApiKey: true,
         ghostContentApiKey: true,
         blueskyHandle: true,
-        blueskyPassword: true
+        blueskyPassword: true,
+        autoSync: true
       }
     });
 
@@ -843,28 +1120,71 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (!user.ghostUrl || !user.ghostApiKey) {
-      return res.status(400).json({ error: 'Ghost Admin API key and URL are required for syncing' });
+    // Validate Ghost configuration
+    if (!user.ghostUrl || !user.ghostApiKey || 
+        user.ghostUrl === 'SKIPPED' || user.ghostApiKey === 'SKIPPED' ||
+        user.ghostUrl.trim() === '' || user.ghostApiKey.trim() === '') {
+      return res.status(400).json({ 
+        error: 'Ghost Admin API key and URL are required for syncing. Please configure them in your settings.' 
+      });
     }
 
-    if (!user.blueskyHandle || !user.blueskyPassword) {
-      return res.status(400).json({ error: 'Bluesky credentials not configured' });
+    // Note: Bluesky configuration is optional for manual sync
+    // Posts will be stored locally regardless of Bluesky connection
+
+    // Validate Ghost connection before attempting sync
+    const isValidConnection = await validateGhostConnection(user.ghostUrl, user.ghostApiKey);
+    if (!isValidConnection) {
+      return res.status(400).json({ 
+        error: 'Invalid Ghost URL or API key. Please check your Ghost configuration.' 
+      });
     }
 
-    // Run sync with higher default limit (50 posts) and force option
-    const result = await syncGhostToBluesky(
+    // First, sync posts locally (always works)
+    const localResult = await syncGhostPostsLocally(
       userId,
       user.ghostUrl,
       user.ghostApiKey,
-      user.blueskyHandle,
-      user.blueskyPassword,
       limit || 50,
       force || false
     );
 
+    let blueskyResult = null;
+    
+    // If user has Bluesky credentials, also sync to Bluesky
+    if (user.blueskyHandle && user.blueskyPassword &&
+        user.blueskyHandle !== 'SKIPPED' && user.blueskyPassword !== 'SKIPPED' &&
+        user.blueskyHandle.trim() !== '' && user.blueskyPassword.trim() !== '') {
+      try {
+        console.log('🦋 Also syncing to Bluesky...');
+        blueskyResult = await syncGhostToBluesky(
+          userId,
+          user.ghostUrl,
+          user.ghostApiKey,
+          user.blueskyHandle,
+          user.blueskyPassword,
+          limit || 50,
+          force || false
+        );
+      } catch (error) {
+        console.error('Bluesky sync failed, but local sync succeeded:', error);
+        blueskyResult = { error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    } else {
+      console.log('📝 Bluesky not configured, skipping Bluesky sync');
+    }
+
     res.json({
       message: 'Sync completed successfully',
-      ...result
+      local: localResult,
+      bluesky: blueskyResult,
+      summary: {
+        localSynced: localResult.synced,
+        localSkipped: localResult.skipped,
+        blueskySynced: blueskyResult?.syncedCount || 0,
+        blueskySkipped: blueskyResult?.skippedCount || 0,
+        blueskyError: (blueskyResult as any)?.error || null
+      }
     });
 
   } catch (error) {
@@ -1462,14 +1782,17 @@ finalApp.use(cors({
   credentials: true 
 }));
 
-// Add redirect for /wizard/ to /bridge/wizard
-finalApp.get('/wizard', (req, res) => {
-  res.redirect(301, '/bridge/wizard');
-});
+// Add redirect for /wizard/ to /bridge/wizard (only for production server)
+// In development, we want /wizard to work directly
+if (process.env.NODE_ENV === 'production') {
+  finalApp.get('/wizard', (req, res) => {
+    res.redirect(301, '/bridge/wizard');
+  });
 
-finalApp.get('/wizard/', (req, res) => {
-  res.redirect(301, '/bridge/wizard');
-});
+  finalApp.get('/wizard/', (req, res) => {
+    res.redirect(301, '/bridge/wizard');
+  });
+}
 
 finalApp.use('/bridge', app);
 finalApp.use('/', app);

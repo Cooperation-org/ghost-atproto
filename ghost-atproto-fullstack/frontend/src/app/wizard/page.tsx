@@ -17,10 +17,15 @@ import {
   FormControlLabel,
   FormGroup,
   Divider,
+  IconButton,
+  Tooltip,
+  Chip,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloudIcon from '@mui/icons-material/Cloud';
 import TwitterIcon from '@mui/icons-material/Twitter';
+import WebhookIcon from '@mui/icons-material/Webhook';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useRouter } from 'next/navigation';
 import { wizardApi, GhostValidationResponse, BlueskyValidationResponse } from '@/lib/wizard-api';
 
@@ -50,11 +55,14 @@ export default function WizardPage() {
     newsletters: true,
   });
 
+  const [autoSync, setAutoSync] = useState(true);
+
   // Validation results
   const [ghostValidation, setGhostValidation] = useState<GhostValidationResponse | null>(null);
   const [blueskyValidation, setBlueskyValidation] = useState<BlueskyValidationResponse | null>(null);
-  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState<string>('');
   const [webhookInstructions, setWebhookInstructions] = useState<string[]>([]);
+  const [showWebhookInfo, setShowWebhookInfo] = useState(false);
 
   const handleNext = async () => {
     setError('');
@@ -75,6 +83,19 @@ export default function WizardPage() {
           return;
         }
         setGhostValidation(result);
+        
+        // Complete wizard with Ghost configuration and show webhook info
+        const wizardResult = await wizardApi.completeWizard({
+          ...formData,
+          blueskyHandle: 'SKIPPED',
+          blueskyPassword: 'SKIPPED',
+          autoSync
+        });
+        
+        setWebhookUrl(wizardResult.webhookUrl);
+        setWebhookInstructions(wizardResult.nextSteps.webhookInstructions);
+        setShowWebhookInfo(true);
+        
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to validate Ghost');
         setLoading(false);
@@ -108,7 +129,10 @@ export default function WizardPage() {
     if (activeStep === 1) {
       setLoading(true);
       try {
-        const result = await wizardApi.completeWizard(formData);
+        const result = await wizardApi.completeWizard({
+          ...formData,
+          autoSync
+        });
         setWebhookUrl(result.webhookUrl);
         setWebhookInstructions(result.nextSteps.webhookInstructions);
       } catch (err) {
@@ -119,7 +143,12 @@ export default function WizardPage() {
       setLoading(false);
     }
 
-    setActiveStep((prevActiveStep) => prevActiveStep + 1);
+    // If webhook info should be shown, go to webhook step, otherwise continue normally
+    if (activeStep === 0 && showWebhookInfo) {
+      setActiveStep(1.5);
+    } else {
+      setActiveStep((prevActiveStep) => prevActiveStep + 1);
+    }
   };
 
   const handleChange = (field: keyof typeof formData) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,11 +168,33 @@ export default function WizardPage() {
     setError('');
 
     try {
-      const result = await wizardApi.skipWizard();
-      if (result.success) {
-        router.push('/dashboard');
+      // If we have Ghost configuration, complete the wizard with Ghost only
+      if (formData.ghostUrl && formData.ghostApiKey) {
+        const result = await wizardApi.completeWizard({
+          ghostUrl: formData.ghostUrl,
+          ghostApiKey: formData.ghostApiKey,
+          ghostContentApiKey: formData.ghostContentApiKey,
+          blueskyHandle: 'SKIPPED',
+          blueskyPassword: 'SKIPPED',
+          name: formData.name,
+          autoSync: autoSync,
+        });
+        
+        if (result.success) {
+          setWebhookUrl(result.webhookUrl);
+          setWebhookInstructions(result.nextSteps.webhookInstructions);
+          router.push('/dashboard');
+        } else {
+          setError('Failed to complete setup with Ghost configuration');
+        }
       } else {
-        setError('Failed to skip wizard setup');
+        // If no Ghost configuration, skip everything
+        const result = await wizardApi.skipWizard();
+        if (result.success) {
+          router.push('/dashboard');
+        } else {
+          setError('Failed to skip wizard setup');
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to skip wizard setup';
@@ -366,6 +417,46 @@ export default function WizardPage() {
                     </Grid>
                   </Grid>
                 </FormGroup>
+              </Box>
+
+              {/* Auto-Sync Settings */}
+              <Box 
+                sx={{ 
+                  mt: 4, 
+                  p: 3, 
+                  bgcolor: '#e3f2fd', 
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: '#2196f3'
+                }}
+              >
+                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700, mb: 2.5, color: '#1976d2' }}>
+                  🔄 Auto-Sync Settings
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Checkbox 
+                      checked={autoSync} 
+                      onChange={(e) => setAutoSync(e.target.checked)}
+                      sx={{
+                        color: '#1976d2',
+                        '&.Mui-checked': {
+                          color: '#1976d2',
+                        },
+                      }}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                        Automatically sync new posts to Bluesky
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        When enabled, new posts published in Ghost will automatically be shared to Bluesky
+                      </Typography>
+                    </Box>
+                  }
+                />
               </Box>
 
               <Button
@@ -666,6 +757,171 @@ export default function WizardPage() {
               </Card>
             </Grid>
           </Grid>
+        );
+
+      case 1.5: // Webhook Information Step
+        return (
+          <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+            <Paper 
+              sx={{ 
+                p: 4, 
+                borderRadius: 3, 
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                border: '1px solid',
+                borderColor: 'grey.200',
+                backgroundColor: '#f8f9fa'
+              }}
+            >
+              {/* Header */}
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, gap: 3 }}>
+                <Box sx={{ 
+                  width: 80, 
+                  height: 80, 
+                  bgcolor: '#1976d2', 
+                  borderRadius: 2.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 42,
+                  fontWeight: 700,
+                  color: 'white',
+                  boxShadow: '0 4px 16px rgba(25, 118, 210, 0.3)'
+                }}>
+                  <WebhookIcon sx={{ fontSize: 40 }} />
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, color: '#1976d2', mb: 0.5 }}>
+                    Webhook Configuration
+                  </Typography>
+                  <Typography variant="body1" color="text.secondary" sx={{ fontSize: '0.95rem' }}>
+                    Complete the setup by configuring your Ghost webhook
+                  </Typography>
+                </Box>
+                <Chip 
+                  icon={<CheckCircleIcon />} 
+                  label="Auto-sync Enabled" 
+                  color="success" 
+                  size="medium"
+                />
+              </Box>
+
+              <Divider sx={{ mb: 4 }} />
+
+              {/* Success Message */}
+              <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  ✅ Ghost connection successful! Your posts are now syncing automatically.
+                </Typography>
+              </Alert>
+
+              {/* Webhook URL */}
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+                Webhook URL
+              </Typography>
+              
+              <Card sx={{ mb: 3, border: '2px solid #e3f2fd' }}>
+                <CardContent sx={{ py: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography 
+                      variant="body1" 
+                      sx={{ 
+                        fontFamily: 'monospace', 
+                        backgroundColor: '#f5f5f5', 
+                        p: 1.5, 
+                        borderRadius: 1,
+                        flex: 1,
+                        mr: 2,
+                        fontSize: '0.9rem'
+                      }}
+                    >
+                      {webhookUrl}
+                    </Typography>
+                    <Tooltip title="Copy webhook URL">
+                      <IconButton 
+                        onClick={() => {
+                          navigator.clipboard.writeText(webhookUrl);
+                        }}
+                        size="small"
+                        sx={{ bgcolor: '#e3f2fd', '&:hover': { bgcolor: '#bbdefb' } }}
+                      >
+                        <ContentCopyIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </CardContent>
+              </Card>
+
+              {/* Setup Instructions */}
+              <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  📋 Setup Instructions:
+                </Typography>
+                <Typography variant="body2" component="div">
+                  1. Go to your Ghost Admin panel<br/>
+                  2. Navigate to <strong>Settings → Integrations</strong><br/>
+                  3. Click <strong>&quot;Add custom integration&quot;</strong><br/>
+                  4. Name it <strong>&quot;Auto-Sync Bridge&quot;</strong><br/>
+                  5. Click <strong>&quot;Add webhook&quot;</strong><br/>
+                  6. Configure the webhook:<br/>
+                  &nbsp;&nbsp;• <strong>Event:</strong> Post published<br/>
+                  &nbsp;&nbsp;• <strong>URL:</strong> {webhookUrl}<br/>
+                  &nbsp;&nbsp;• <strong>Header:</strong> X-User-ID = [Your User ID]<br/>
+                  7. Save the webhook
+                </Typography>
+              </Alert>
+
+              {/* Action Buttons */}
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 4 }}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={() => router.push('/dashboard')}
+                  sx={{ 
+                    px: 4, 
+                    py: 1.5, 
+                    bgcolor: '#1976d2',
+                    '&:hover': { 
+                      bgcolor: '#1565c0',
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 6px 20px rgba(0,0,0,0.2)'
+                    },
+                    textTransform: 'none',
+                    fontSize: '1.1rem',
+                    fontWeight: 600,
+                    borderRadius: 2,
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                  }}
+                >
+                  Go to Dashboard
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  size="large"
+                  onClick={() => setActiveStep(1)}
+                  sx={{ 
+                    px: 4, 
+                    py: 1.5, 
+                    borderColor: '#1976d2',
+                    color: '#1976d2',
+                    '&:hover': { 
+                      borderColor: '#1565c0',
+                      color: '#1565c0',
+                      bgcolor: '#e3f2fd'
+                    },
+                    textTransform: 'none',
+                    fontSize: '1.1rem',
+                    fontWeight: 600,
+                    borderRadius: 2,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  Add Bluesky Later
+                </Button>
+              </Box>
+            </Paper>
+          </Box>
         );
 
       case 2:

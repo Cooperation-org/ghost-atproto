@@ -187,7 +187,7 @@ export default function CivicActionsPage() {
   const convertToCivicEvent = useCallback((action: MyCivicAction): CivicEvent => {
     const eventDate = action.eventDate ? new Date(action.eventDate).getTime() / 1000 : Date.now() / 1000;
     return {
-      id: parseInt(action.id) || Math.random() * 1000000, // Use id or generate random
+      id: parseInt(action.id) || Date.now() + Math.floor(Math.random() * 1000), // Use id or generate random
       title: action.title,
       summary: action.description || '',
       description: action.description || '',
@@ -196,7 +196,7 @@ export default function CivicActionsPage() {
       timeslots: [{
         start_date: eventDate,
         end_date: eventDate + 3600, // 1 hour default duration
-        id: Math.random() * 1000000,
+        id: Date.now() + Math.floor(Math.random() * 1000),
         is_full: false,
       }],
       sponsor: {

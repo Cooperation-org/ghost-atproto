@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+import { isClient } from './hydration-utils';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002';
 
 export interface GhostValidationResponse {
   valid: boolean;
@@ -40,11 +42,13 @@ export interface WizardStatusResponse {
   isSkipped: boolean;
   hasGhost: boolean;
   hasBluesky: boolean;
+  isBlueskySkipped: boolean;
+  isGhostSkipped: boolean;
 }
 
 class WizardApiClient {
   private getToken(): string | null {
-    if (typeof window === 'undefined') return null;
+    if (!isClient()) return null;
     return localStorage.getItem('token');
   }
 
@@ -102,6 +106,7 @@ class WizardApiClient {
     blueskyHandle: string;
     blueskyPassword: string;
     name?: string;
+    autoSync?: boolean;
   }): Promise<WizardCompleteResponse> {
     return this.request<WizardCompleteResponse>('/api/wizard/complete', {
       method: 'POST',
