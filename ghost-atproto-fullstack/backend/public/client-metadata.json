@@ -1,14 +1,22 @@
 {
-  "client_id": "https://your-domain.com/client-metadata.json",
-  "client_name": "Ghost to Bluesky Integration",
-  "client_uri": "https://your-domain.com",
+  "client_id": "http://127.0.0.1:5000/client-metadata.json",
+  "client_name": "Ghost ATProto Bridge",
+  "client_uri": "http://127.0.0.1:5000",
+  "logo_uri": "http://127.0.0.1:5000/logo.png",
+  "tos_uri": "http://127.0.0.1:5000/terms",
+  "policy_uri": "http://127.0.0.1:5000/privacy",
   "redirect_uris": [
-    "https://your-domain.com/api/oauth/callback"
+    "http://127.0.0.1:5000/api/auth/bluesky/callback"
   ],
   "scope": "atproto transition:generic",
-  "grant_types": ["authorization_code", "refresh_token"],
-  "response_types": ["code"],
+  "grant_types": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "response_types": [
+    "code"
+  ],
+  "token_endpoint_auth_method": "none",
   "application_type": "web",
-  "token_endpoint_auth_method": "private_key_jwt",
   "dpop_bound_access_tokens": true
 }
