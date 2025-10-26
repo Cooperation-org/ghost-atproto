@@ -12,7 +12,8 @@ export interface CivicActionDto {
   imageUrl?: string | null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002';
+// Use 127.0.0.1 instead of localhost for AT Protocol OAuth (RFC 8252 requirement)
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
 
 class ApiClient {
   private token: string | null = null;
@@ -92,6 +93,31 @@ class ApiClient {
     if (isClient()) {
       localStorage.removeItem('token');
     }
+  }
+
+  // OAuth
+  async getOAuthConfig(): Promise<{
+    google: { enabled: boolean; buttonText: string };
+    bluesky: { enabled: boolean; buttonText: string; requiresHandle: boolean; requiresPassword?: boolean; handlePlaceholder: string; passwordPlaceholder?: string };
+  }> {
+    return this.request('/api/auth/oauth/config');
+  }
+
+  async loginWithBluesky(handle: string, password: string): Promise<LoginResponse> {
+    const data = await this.request<LoginResponse>('/api/auth/bluesky', {
+      method: 'POST',
+      body: JSON.stringify({ handle, password }),
+    });
+    this.token = data.token;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', data.token);
+    }
+    return data;
+  }
+
+  // For Google OAuth, just redirect to the backend route
+  getGoogleOAuthUrl(): string {
+    return `${API_BASE}/api/auth/google`;
   }
 
   async getMe(): Promise<User> {
