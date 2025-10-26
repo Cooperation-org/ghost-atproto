@@ -18,7 +18,8 @@
     "@types/passport": "^1.0.17",
     "@types/passport-google-oauth20": "^2.0.16",
     "axios": "^1.12.2",
-    "bcryptjs": "^3.0.2",
+    "@atproto-labs/simple-store": "^0.1.4",
+    "@atproto-labs/simple-store-memory": "^0.1.4",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -31,7 +32,6 @@
     "passport-google-oauth20": "^2.0.0"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.13",
     "@types/express": "^5.0.3",

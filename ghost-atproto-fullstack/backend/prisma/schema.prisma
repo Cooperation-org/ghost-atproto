@@ -18,19 +18,24 @@ enum Role {
 
 model User {
   id        String   @id @default(cuid())
-  email     String   @unique
+  email     String?  @unique  // Optional for ATProto users
   name      String?
-  password  String   // Hashed password
+  avatar    String?   @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Authorization
   role Role @default(USER)
 
-  // NEW: Add these Bluesky fields
+  // OAuth providers
+  googleId           String? @unique @map("google_id")
+  blueskyDid         String? @unique @map("bluesky_did") // Decentralized identifier
   blueskyHandle      String? @map("bluesky_handle")
-  blueskyPassword    String? @map("bluesky_password")
-  blueskyDid         String? // Decentralized identifier
+  // NO PASSWORD STORAGE for OAuth users
+  
+  // Metadata
+  newsletterSubscribed Boolean @default(false) @map("newsletter_subscribed")
+  lastLoginAt         DateTime? @map("last_login_at")
 
   // Ghost integration (supports any Ghost server)
   // Ghost fields
@@ -47,34 +52,34 @@ model User {
   // Relations
   posts         Post[]
   syncLogs      SyncLog[]
-  oauthSessions OAuthSession[]
   submittedCivicActions CivicAction[] @relation("SubmittedActions")
   reviewedCivicActions  CivicAction[] @relation("ReviewedActions")
 
+  @@index([email])
+  @@index([blueskyDid])
+  @@index([googleId])
   @@map("users")
 }
 
+// OAuth state storage (for CSRF protection)
+model OAuthState {
+  key       String   @id
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([updatedAt])
+  @@map("oauth_states")
+}
+
+// OAuth session storage (for persistent sessions)
 model OAuthSession {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // OAuth tokens
-  accessToken  String   @db.Text
-  refreshToken String   @db.Text
-  tokenType    String   @default("DPoP")
-
-  // DPoP key (for token binding)
-  dpopKeyJwk   String   @db.Text // JSON Web Key for DPoP
-
-  // Session metadata
-  sub          String   // Subject (DID)
-  scope        String?  // Granted scopes
-  expiresAt    DateTime
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
+  key       String   @id
+  value     String   @db.LongText
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([updatedAt])
   @@map("oauth_sessions")
 }
 

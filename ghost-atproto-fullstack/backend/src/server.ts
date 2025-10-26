@@ -10,14 +10,13 @@ import path from 'path';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+
 import passport from 'passport';
 import atprotoRoutes from './routes/atproto';
 import wizardRoutes from './routes/wizard';
 import oauthRoutes from './routes/oauth';
 import axios from 'axios';
 import { setupGoogleOAuth } from './lib/google-oauth';
-import { setupBlueskyOAuth } from './lib/bluesky-oauth';
 import { validateOAuthConfig } from './lib/oauth-config';
 
 // Load environment variables
@@ -65,7 +64,6 @@ app.use(passport.session());
 
 // Setup OAuth providers
 setupGoogleOAuth();
-setupBlueskyOAuth(); // Full AT Protocol OAuth following official docs
 
 // Validate OAuth configuration
 validateOAuthConfig();
@@ -187,47 +185,17 @@ export async function validateGhostConnection(ghostUrl: string, ghostApiKey: str
   }
 }
 
-// Helper: Get Bluesky agent for user (hybrid: OAuth or app password)
+// Helper: Get Bluesky agent for user (OAuth-based)
 async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { oauthSessions: { orderBy: { createdAt: 'desc' }, take: 1 } }
+    where: { id: userId }
   });
 
-  if (!user) return null;
+  if (!user || !user.blueskyDid) return null;
 
-  // Try OAuth first
-  if (user.oauthSessions.length > 0 && oauthClient) {
-    const session = user.oauthSessions[0];
-    try {
-      // Check if token is expired
-      if (session.expiresAt > new Date()) {
-        const agent = new BskyAgent({ service: process.env.ATPROTO_SERVICE || 'https://bsky.social' });
-        // TODO: Implement DPoP token usage with OAuth client
-        // For now, this is a placeholder for OAuth token restoration
-        console.log('OAuth session available but token restoration needs implementation');
-      }
-    } catch (error) {
-      console.error('OAuth session restore failed:', error);
-    }
-  }
-
-  // Fallback to app password
-  if (user.blueskyHandle && user.blueskyPassword) {
-    try {
-      const agent = new BskyAgent({ service: process.env.ATPROTO_SERVICE || 'https://bsky.social' });
-      await agent.login({
-        identifier: user.blueskyHandle,
-        password: user.blueskyPassword,
-      });
-      return agent;
-    } catch (error) {
-      console.error('App password login failed:', error);
-      return null;
-    }
-  }
-
-  return null;
+  // Use the new OAuth implementation
+  const { getAgentForDid } = await import('./lib/oauth-atproto');
+  return await getAgentForDid(user.blueskyDid);
 }
 
 // Helper: Post to Bluesky with clickable links and better content formatting

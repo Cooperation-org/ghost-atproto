@@ -6,7 +6,7 @@
   "tos_uri": "http://127.0.0.1:5000/terms",
   "policy_uri": "http://127.0.0.1:5000/privacy",
   "redirect_uris": [
-    "http://127.0.0.1:5000/api/auth/bluesky/callback"
+    "http://127.0.0.1:5000/api/auth/callback"
   ],
   "scope": "atproto transition:generic",
   "grant_types": [
