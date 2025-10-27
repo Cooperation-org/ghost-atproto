@@ -40,11 +40,19 @@ export function PublicCivicActionsLayout({ children }: { readonly children: Reac
       const path = window.location.pathname;
       const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
       const cleanPath = basePath ? path.replace(basePath, '') : path;
-      const tabs = ['/dashboard', '/dashboard/civic-actions'];
-      const matched = tabs.find(t => cleanPath === t || cleanPath.startsWith(t + '/')) || false;
-      setCurrentTab(matched);
+      
+      // For civic actions pages, always use /dashboard/civic-actions
+      if (cleanPath.startsWith('/dashboard/civic-actions')) {
+        setCurrentTab('/dashboard/civic-actions');
+      } else if (cleanPath.startsWith('/dashboard') && user) {
+        // Only set /dashboard if user is authenticated
+        setCurrentTab('/dashboard');
+      } else {
+        // Default to civic actions for public view
+        setCurrentTab('/dashboard/civic-actions');
+      }
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     // Try to load user data (optional - doesn't redirect if fails)
