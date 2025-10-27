@@ -18,7 +18,7 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PublicCivicActionsLayout } from '@/components/layout/PublicCivicActionsLayout';
 import { api, CivicActionDto } from '@/lib/api';
 
 interface CivicActionDetail extends CivicActionDto {
@@ -65,17 +65,17 @@ export default function CivicActionDetailPage() {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <PublicCivicActionsLayout>
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
           <CircularProgress />
         </Box>
-      </DashboardLayout>
+      </PublicCivicActionsLayout>
     );
   }
 
   if (error || !action) {
     return (
-      <DashboardLayout>
+      <PublicCivicActionsLayout>
         <Box sx={{ p: 4, textAlign: 'center' }}>
           <Typography variant="h5" color="error" gutterBottom>
             {error || 'Civic action not found'}
@@ -89,7 +89,7 @@ export default function CivicActionDetailPage() {
             Back to Civic Actions
           </Button>
         </Box>
-      </DashboardLayout>
+      </PublicCivicActionsLayout>
     );
   }
 
@@ -121,7 +121,7 @@ export default function CivicActionDetailPage() {
   };
 
   return (
-    <DashboardLayout>
+    <PublicCivicActionsLayout>
       <Button
         startIcon={<ArrowBackIcon />}
         onClick={() => router.push('/dashboard/civic-actions')}
@@ -315,7 +315,7 @@ export default function CivicActionDetailPage() {
           strengthen our communities and democracy. Your participation matters.
         </Typography>
       </Paper>
-    </DashboardLayout>
+    </PublicCivicActionsLayout>
   );
 }
 
