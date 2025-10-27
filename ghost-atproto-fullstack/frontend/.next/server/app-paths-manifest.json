@@ -1,5 +1,5 @@
 {
   "/favicon.ico/route": "app/favicon.ico/route.js",
-  "/login/page": "app/login/page.js",
-  "/dashboard/civic-actions/page": "app/dashboard/civic-actions/page.js"
+  "/dashboard/civic-actions/page": "app/dashboard/civic-actions/page.js",
+  "/login/page": "app/login/page.js"
 }
