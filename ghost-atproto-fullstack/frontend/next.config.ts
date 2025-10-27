@@ -1,8 +1,11 @@
 import type { NextConfig } from "next";
 
+// Use basePath from environment variable (empty string for local, '/bridge' for production)
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
 const nextConfig: NextConfig = {
-  basePath: '/bridge',
-  assetPrefix: '/bridge',
+  basePath: basePath,
+  assetPrefix: basePath || undefined,
   // Fix workspace root detection to prevent lockfile warnings
   outputFileTracingRoot: __dirname,
   webpack: (config, { isServer }) => {
