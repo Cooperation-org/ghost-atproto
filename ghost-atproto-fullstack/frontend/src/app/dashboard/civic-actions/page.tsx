@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Paper,
   Typography,
@@ -84,6 +85,7 @@ interface CivicEventsResponse {
 }
 
 export default function CivicActionsPage() {
+  const router = useRouter();
   const [events, setEvents] = useState<CivicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1397,8 +1399,8 @@ export default function CivicActionsPage() {
 
               const handleCardClick = () => {
                 if (isUserSubmission && actionId) {
-                  // Navigate to detail page for user-submitted actions
-                  window.location.href = `/dashboard/civic-actions/${actionId}`;
+                  // Navigate to detail page for user-submitted actions using Next.js router
+                  router.push(`/dashboard/civic-actions/${actionId}`);
                 } else {
                   // Open external link for Mobilize API events
                   window.open(event.browser_url, '_blank');
