@@ -39,9 +39,17 @@ export default function CivicActionDetailPage() {
     async function loadAction() {
       try {
         setLoading(true);
-        const data = await api.getCivicActionById(id);
-        setAction(data);
-        setError(null);
+        // Try public API first (works without authentication)
+        try {
+          const data = await api.getPublicCivicActionById(id);
+          setAction(data);
+          setError(null);
+        } catch {
+          // If public API fails, try authenticated API (for pending/rejected actions owned by user or admin)
+          const data = await api.getCivicActionById(id);
+          setAction(data);
+          setError(null);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load civic action');
         console.error('Failed to load civic action:', err);

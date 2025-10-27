@@ -375,6 +375,19 @@ export default function CivicActionsPage() {
   // Function to refresh civic action data
   const refreshCivicActions = useCallback(async () => {
     try {
+      // Load approved civic actions using PUBLIC API (works without authentication)
+      const approved = await api.getPublicCivicActions();
+      const cleanedApproved = approved.map(action => ({
+        ...action,
+        imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
+      }));
+      setApprovedActions(cleanedApproved);
+    } catch (error) {
+      console.log('Could not load public civic actions:', error);
+    }
+
+    // Try to load authenticated user data (optional - only if logged in)
+    try {
       // Load user's own civic actions (pending/approved/rejected)
       const mine = await api.getMyCivicActions();
       const cleanedMine = mine.map(action => ({
@@ -383,19 +396,7 @@ export default function CivicActionsPage() {
       }));
       setMyActions(cleanedMine);
     } catch {
-      // ignore silently; user might not be logged in or endpoint unavailable
-    }
-
-    try {
-      // Load approved civic actions from all users
-      const approved = await api.getCivicActions('approved');
-      const cleanedApproved = approved.map(action => ({
-        ...action,
-        imageUrl: action.imageUrl && action.imageUrl.startsWith('blob:') ? null : action.imageUrl,
-      }));
-      setApprovedActions(cleanedApproved);
-    } catch {
-      // ignore silently if endpoint unavailable
+      // User not logged in - this is fine
     }
 
     try {
@@ -410,7 +411,9 @@ export default function CivicActionsPage() {
         }));
         setAdminPending(cleanedPending);
       }
-    } catch {}
+    } catch {
+      // User not logged in or not admin - this is fine
+    }
   }, []);
 
   // Load initial events

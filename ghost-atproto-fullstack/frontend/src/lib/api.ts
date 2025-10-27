@@ -183,6 +183,46 @@ class ApiClient {
   }
 
   // Civic Actions (user-submitted)
+  
+  // PUBLIC: Get approved civic actions (no authentication required)
+  async getPublicCivicActions(): Promise<CivicActionDto[]> {
+    const response = await fetch(`${API_BASE}/api/public/civic-actions`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const error: ApiError = await response.json().catch(() => ({
+        error: 'An error occurred',
+      }));
+      throw new Error(error.error);
+    }
+
+    return response.json();
+  }
+
+  // PUBLIC: Get a single approved civic action by ID (no authentication required)
+  async getPublicCivicActionById(id: string): Promise<CivicActionDto> {
+    const response = await fetch(`${API_BASE}/api/public/civic-actions/${id}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const error: ApiError = await response.json().catch(() => ({
+        error: 'An error occurred',
+      }));
+      throw new Error(error.error);
+    }
+
+    return response.json();
+  }
+
+  // AUTHENTICATED: Get civic actions (admins see all, users see approved)
   async getCivicActions(status?: string): Promise<CivicActionDto[]> {
     const queryString = status ? `?status=${status}` : '';
     return this.request<CivicActionDto[]>(`/api/civic-actions${queryString}`);

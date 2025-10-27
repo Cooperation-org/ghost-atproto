@@ -1496,6 +1496,67 @@ app.get('/api/sync-logs', async (req, res) => {
 });
 
 // Civic Actions Routes
+
+// PUBLIC: Get approved civic actions (no authentication required)
+app.get('/api/public/civic-actions', async (req, res) => {
+  try {
+    // Only show approved civic actions to public
+    const civicActions = await prisma.civicAction.findMany({
+      where: { status: 'approved' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+          }
+        }
+      },
+      orderBy: [
+        { isPinned: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
+
+    res.json(civicActions);
+  } catch (error) {
+    console.error('Get public civic actions error:', error);
+    res.status(500).json({ error: 'Failed to fetch civic actions' });
+  }
+});
+
+// PUBLIC: Get a single approved civic action by ID (no authentication required)
+app.get('/api/public/civic-actions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const civicAction = await prisma.civicAction.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+          }
+        }
+      }
+    });
+
+    if (!civicAction) {
+      return res.status(404).json({ error: 'Civic action not found' });
+    }
+
+    // Only return if approved (public access)
+    if (civicAction.status !== 'approved') {
+      return res.status(404).json({ error: 'Civic action not found' });
+    }
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Get public civic action by ID error:', error);
+    res.status(500).json({ error: 'Failed to fetch civic action' });
+  }
+});
+
 // Create a civic action submission
 app.post('/api/civic-actions', authenticateToken, async (req, res) => {
   try {
