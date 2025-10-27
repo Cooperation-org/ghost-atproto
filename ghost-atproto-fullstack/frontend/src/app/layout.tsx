@@ -24,12 +24,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* Load crypto polyfill early to prevent crypto.randomUUID errors */}
         <Script
-          src="/crypto-polyfill.js"
+          src={`${basePath}/crypto-polyfill.js`}
           strategy="beforeInteractive"
         />
       </head>
