@@ -142,7 +142,7 @@ export async function handleBlueskyCallback(params: URLSearchParams): Promise<{
       });
     } else {
       user = await prisma.user.create({
-        data: { email, name: displayName, role: 'USER', blueskyHandle: handle, blueskyDid: did },
+        data: { email, name: displayName, role: 'USER', blueskyHandle: handle, blueskyDid: did, password: '' },
       });
     }
 

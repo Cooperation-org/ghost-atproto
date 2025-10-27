@@ -41,6 +41,7 @@ export function setupGoogleOAuth() {
                 email,
                 name,
                 role: 'USER',
+                password: '', // OAuth users don't need password
               },
             });
           } else {
