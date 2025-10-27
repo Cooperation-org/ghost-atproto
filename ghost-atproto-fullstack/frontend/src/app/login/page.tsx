@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Box,
@@ -20,14 +20,17 @@ import {
 import NextLink from 'next/link';
 import { api } from '@/lib/api';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [oauthConfig, setOauthConfig] = useState<any>(null);
+  const [oauthConfig, setOauthConfig] = useState<{
+    google: { enabled: boolean; buttonText: string };
+    bluesky: { enabled: boolean; buttonText: string; requiresHandle: boolean; requiresPassword?: boolean; handlePlaceholder: string; passwordPlaceholder?: string };
+  } | null>(null);
   
   // Bluesky OAuth dialog
   const [blueskyDialogOpen, setBlueskyDialogOpen] = useState(false);
@@ -350,5 +353,13 @@ export default function LoginPage() {
         </DialogActions>
       </Dialog>
     </Container>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>Loading...</Box>}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

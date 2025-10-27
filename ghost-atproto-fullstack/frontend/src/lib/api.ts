@@ -13,7 +13,7 @@ export interface CivicActionDto {
 }
 
 // Use 127.0.0.1 instead of localhost for AT Protocol OAuth (RFC 8252 requirement)
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
 
 class ApiClient {
   private token: string | null = null;
@@ -238,6 +238,10 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+  }
+
+  async getCivicActionById(id: string): Promise<CivicActionDto> {
+    return this.request<CivicActionDto>(`/api/civic-actions/${id}`);
   }
 
   // Civic Events (Mobilize API)

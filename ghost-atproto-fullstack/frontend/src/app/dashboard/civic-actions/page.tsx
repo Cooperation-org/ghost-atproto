@@ -30,6 +30,7 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PeopleIcon from '@mui/icons-material/People';
 import CampaignIcon from '@mui/icons-material/Campaign';
+import CloudIcon from '@mui/icons-material/Cloud';
 import SearchIcon from '@mui/icons-material/Search';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
@@ -49,7 +50,7 @@ interface EventSponsor {
 }
 
 interface CivicEvent {
-  id: number;
+  id: number | string; // Can be number (Mobilize) or string (database ID)
   title: string;
   summary: string;
   description: string;
@@ -65,7 +66,15 @@ interface CivicEvent {
   browser_url: string;
   is_virtual: boolean;
   timezone: string;
+  actionId?: string; // Store the original database civic action ID
 }
+
+// Helper to ensure event ID is number for imageErrors Set
+const getEventIdAsNumber = (event: CivicEvent): number => {
+  if (typeof event.id === 'number') return event.id;
+  // Convert string ID to number for hashing
+  return typeof event.id === 'string' ? parseInt(event.id, 10) || 0 : 0;
+};
 
 interface CivicEventsResponse {
   count: number;
@@ -187,7 +196,8 @@ export default function CivicActionsPage() {
   const convertToCivicEvent = useCallback((action: MyCivicAction): CivicEvent => {
     const eventDate = action.eventDate ? new Date(action.eventDate).getTime() / 1000 : Date.now() / 1000;
     return {
-      id: parseInt(action.id) || Date.now() + Math.floor(Math.random() * 1000), // Use id or generate random
+      id: Date.now() + Math.floor(Math.random() * 1000), // Unique display ID
+      actionId: action.id, // Store original database ID
       title: action.title,
       summary: action.description || '',
       description: action.description || '',
@@ -1007,6 +1017,7 @@ export default function CivicActionsPage() {
               {/* Image */}
               {selectedAction.imageUrl && (
                 <Box sx={{ textAlign: 'center' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src={selectedAction.imageUrl} 
                     alt={selectedAction.title}
@@ -1379,6 +1390,21 @@ export default function CivicActionsPage() {
               ];
               const gradient = gradients[index % gradients.length];
 
+              // Check if this is a user-submitted civic action
+              const isUserSubmission = event.sponsor.name === 'Community Action';
+              // Use actionId if available (database civic action), otherwise use the event ID
+              const actionId = isUserSubmission ? (event.actionId || event.id.toString()) : null;
+
+              const handleCardClick = () => {
+                if (isUserSubmission && actionId) {
+                  // Navigate to detail page for user-submitted actions
+                  window.location.href = `/dashboard/civic-actions/${actionId}`;
+                } else {
+                  // Open external link for Mobilize API events
+                  window.open(event.browser_url, '_blank');
+                }
+              };
+
               return (
                 <Box
                   key={`${event.id}-${index}`}
@@ -1398,26 +1424,33 @@ export default function CivicActionsPage() {
                       display: 'flex',
                       flexDirection: 'column',
                       borderRadius: 3,
-                      overflow: 'hidden',
+                      overflow: 'visible', // Allow logo badge to overflow
+                      position: 'relative',
                       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                       border: '1px solid',
                       borderColor: 'grey.200',
+                      cursor: 'pointer',
                       '&:hover': {
                         transform: 'translateY(-8px)',
                         boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
                         borderColor: 'primary.main',
+                        '& .civicsky-badge': {
+                          transform: 'scale(1.05)',
+                          boxShadow: '0 6px 16px rgba(25, 118, 210, 0.4)',
+                        },
                       },
                     }}
+                    onClick={handleCardClick}
                   >
                     {/* Featured Image or Gradient */}
-                    {event.featured_image_url && !imageErrors.has(event.id) ? (
+                    {event.featured_image_url && !imageErrors.has(getEventIdAsNumber(event)) ? (
                       <CardMedia
                         component="img"
                         height="180"
                         image={event.featured_image_url}
                         alt={event.title}
                         sx={{ objectFit: 'cover' }}
-                        onError={() => handleImageError(event.id)}
+                        onError={() => handleImageError(getEventIdAsNumber(event))}
                       />
                     ) : (
                       <Box
@@ -1430,12 +1463,65 @@ export default function CivicActionsPage() {
                           justifyContent: 'center',
                         }}
                       >
-                        <CampaignIcon sx={{ fontSize: 48, color: 'rgba(255,255,255,0.3)' }} />
+                        <CloudIcon sx={{ fontSize: 48, color: 'rgba(255,255,255,0.3)' }} />
                       </Box>
                     )}
 
+                    {/* Civicsky Logo Badge - Creative Design with Hover Effect */}
+                    <Box 
+                      className="civicsky-badge"
+                      sx={{ 
+                        position: 'absolute', 
+                        top: -8, 
+                        left: 12,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        bgcolor: 'primary.main',
+                        borderRadius: '0 0 12px 12px',
+                        px: 2.5,
+                        py: 1,
+                        boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
+                        zIndex: 2,
+                        transition: 'all 0.3s ease',
+                        '&::before': {
+                          content: '""',
+                          position: 'absolute',
+                          top: 0,
+                          left: -2,
+                          right: -2,
+                          bottom: -2,
+                          background: 'linear-gradient(135deg, #42a5f5, #1976d2)',
+                          borderRadius: '0 0 14px 14px',
+                          zIndex: -1,
+                          opacity: 0,
+                          transition: 'opacity 0.3s ease',
+                        },
+                        '&:hover': {
+                          '&::before': {
+                            opacity: 1,
+                          },
+                        },
+                      }}
+                    >
+                      <CloudIcon sx={{ fontSize: 17, color: 'white', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }} />
+                      <Typography 
+                        variant="caption" 
+                        sx={{ 
+                          fontWeight: 800, 
+                          color: 'white',
+                          fontSize: '0.75rem',
+                          letterSpacing: '0.15em',
+                          textTransform: 'uppercase',
+                          textShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                        }}
+                      >
+                        Civicsky
+                      </Typography>
+                    </Box>
+
                     {/* Event Type Badge */}
-                    <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 1, flexDirection: 'column', alignItems: 'flex-end' }}>
+                    <Box sx={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 1, flexDirection: 'column', alignItems: 'flex-end' }}>
                       <Chip
                         label={(event.event_type ?? 'OTHER').replace(/_/g, ' ')}
                         size="small"
@@ -1444,6 +1530,7 @@ export default function CivicActionsPage() {
                           color: getEventTypeColor(event.event_type),
                           fontWeight: 600,
                           backdropFilter: 'blur(10px)',
+                          border: '1px solid rgba(255,255,255,0.2)',
                         }}
                       />
                       {event.sponsor.name === 'Community Action' && (
@@ -1587,7 +1674,7 @@ export default function CivicActionsPage() {
                       </Stack>
 
                       {/* Actions */}
-                      <Box sx={{ display: 'flex', gap: 1, mt: 'auto', width: '100%' }}>
+                      <Box sx={{ display: 'flex', gap: 1, mt: 'auto', width: '100%', position: 'relative' }}>
                         <Button
                           variant="outlined"
                           sx={{
@@ -1604,9 +1691,12 @@ export default function CivicActionsPage() {
                               borderColor: 'primary.main',
                             },
                           }}
-                          onClick={() => window.open(event.browser_url, '_blank')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCardClick();
+                          }}
                         >
-                          Learn More
+                          {isUserSubmission ? 'View Details' : 'Learn More'}
                         </Button>
                         <Button
                           variant="contained"
@@ -1621,6 +1711,7 @@ export default function CivicActionsPage() {
                             flexShrink: 0,
                           }}
                           disabled
+                          onClick={(e) => e.stopPropagation()}
                         >
                           Add to Article
                         </Button>

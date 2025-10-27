@@ -1623,6 +1623,56 @@ app.get('/api/civic-actions/mine', authenticateToken, async (req, res) => {
   }
 });
 
+// Get a single civic action by ID
+app.get('/api/civic-actions/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const civicAction = await prisma.civicAction.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          }
+        },
+        reviewer: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          }
+        }
+      }
+    });
+
+    if (!civicAction) {
+      return res.status(404).json({ error: 'Civic action not found' });
+    }
+
+    // Only return the action if:
+    // 1. User is the owner
+    // 2. User is an admin
+    // 3. Action is approved (visible to everyone)
+    if (civicAction.userId !== userId && user.role !== 'ADMIN' && civicAction.status !== 'approved') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Get civic action by ID error:', error);
+    res.status(500).json({ error: 'Failed to fetch civic action' });
+  }
+});
+
 // Update a civic action (owner-only) while status is pending
 app.put('/api/civic-actions/:id', authenticateToken, async (req, res) => {
   try {

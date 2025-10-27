@@ -31,74 +31,91 @@ export function setupGoogleOAuth() {
             return done(new Error('No email found in Google profile'));
           }
 
-          // Find or create OAuth account
-          let oauthAccount = await prisma.oAuthAccount.findUnique({
-            where: {
-              provider_providerId: {
-                provider: 'google',
-                providerId: googleId,
-              },
-            },
-            include: { user: true },
-          });
+          // Check if user exists with this email
+          let user = await prisma.user.findUnique({ where: { email } });
 
-          let user;
-
-          if (oauthAccount) {
-            // Update existing OAuth account
-            oauthAccount = await prisma.oAuthAccount.update({
-              where: { id: oauthAccount.id },
+          if (!user) {
+            // Create new user for Google OAuth
+            user = await prisma.user.create({
               data: {
-                accessToken,
-                refreshToken: refreshToken || undefined,
                 email,
                 name,
-                picture,
+                role: 'USER',
+                password: '', // OAuth users don't need password
               },
-              include: { user: true },
             });
-            user = oauthAccount.user;
           } else {
-            // Check if user exists with this email
-            user = await prisma.user.findUnique({ where: { email } });
-
-            if (user) {
-              // Link Google account to existing user
-              oauthAccount = await prisma.oAuthAccount.create({
-                data: {
-                  userId: user.id,
-                  provider: 'google',
-                  providerId: googleId,
-                  email,
-                  name,
-                  picture,
-                  accessToken,
-                  refreshToken,
-                },
-                include: { user: true },
-              });
-            } else {
-              // Create new user and link Google account
-              user = await prisma.user.create({
-                data: {
-                  email,
-                  name,
-                  role: 'USER',
-                  oauthAccounts: {
-                    create: {
-                      provider: 'google',
-                      providerId: googleId,
-                      email,
-                      name,
-                      picture,
-                      accessToken,
-                      refreshToken,
-                    },
-                  },
-                },
+            // Update existing user's name if needed
+            if (name && user.name !== name) {
+              user = await prisma.user.update({
+                where: { id: user.id },
+                data: { name },
               });
             }
           }
+          // let oauthAccount = await prisma.oAuthAccount.findUnique({
+          //   where: {
+          //     provider_providerId: {
+          //       provider: 'google',
+          //       providerId: googleId,
+          //     },
+          //   },
+          //   include: { user: true },
+          // });
+
+          // let user;
+
+          // if (oauthAccount) {
+          //   // Update existing OAuth account
+          //   oauthAccount = await prisma.oAuthAccount.update({
+          //     where: { id: oauthAccount.id },
+          //     data: {
+          //       accessToken,
+          //       refreshToken: refreshToken || undefined,
+          //       email,
+          //       name,
+          //       picture,
+          //     },
+          //     include: { user: true },
+          //   });
+          //   user = oauthAccount.user;
+          // } else {
+          //   // Check if user exists with this email
+          //   user = await prisma.user.findUnique({ where: { email } });
+
+          //   if (user) {
+          //     // Link Google account to existing user
+          //     oauthAccount = await prisma.oAuthAccount.create({
+          //       data: {
+          //         userId: user.id,
+          //         provider: 'google',
+          //         providerId: googleId,
+          //         email,
+          //         name,
+          //         picture,
+          //         accessToken,
+          //         refreshToken,
+          //       },
+          //       include: { user: true },
+          //     });
+          //   } else {
+          //     // Create new user and link Google account
+          //     user = await prisma.user.create({
+          //       data: {
+          //         email,
+          //         name,
+          //         role: 'USER',
+          //         oauthAccounts: {
+          //           create: {
+          //             provider: 'google',
+          //             providerId: googleId,
+          //             email,
+          //             name,
+          //             picture,
+          //             accessToken,
+          //             refreshToken,
+          //           },
+          //         },
 
           return done(null, user);
         } catch (error) {
@@ -126,4 +143,3 @@ export function setupGoogleOAuth() {
 
   console.log('✅ Google OAuth configured');
 }
-

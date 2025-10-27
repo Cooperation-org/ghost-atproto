@@ -120,7 +120,7 @@ router.post('/bluesky', async (req, res) => {
       });
     } else {
       user = await prisma.user.create({
-        data: { email, name: displayName, role: 'USER', blueskyHandle: handle, blueskyPassword: password, blueskyDid: did },
+        data: { email, name: displayName, role: 'USER', blueskyHandle: handle, blueskyPassword: password, blueskyDid: did, password: '' },
       });
     }
 
