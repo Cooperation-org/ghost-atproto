@@ -42,8 +42,8 @@ jobs:
             
             # Backend
             log "Backend..."
-            cd backend
-            npm install
+            cd ghost-atproto-fullstack/backend
+            npm ci --prefer-offline
             npx prisma generate
             npm run build
             pm2 restart atproto-backend 2>/dev/null || pm2 start dist/index.js --name atproto-backend
@@ -51,7 +51,7 @@ jobs:
             # Frontend
             log "Frontend..."
             cd ../frontend
-            npm install
+            npm ci --prefer-offline
             npm run build
             pm2 restart atproto-frontend 2>/dev/null || pm2 start npm --name atproto-frontend -- start
             
