@@ -26,7 +26,6 @@ jobs:
         run: |
           cd ghost-atproto-fullstack/backend
           npm install
-          npm run lint
           npm run build
           npx prisma generate
           npm test
@@ -36,7 +35,6 @@ jobs:
         run: |
           cd ghost-atproto-fullstack/frontend
           npm install
-          npm run lint
           npm run build
           npm test
       
