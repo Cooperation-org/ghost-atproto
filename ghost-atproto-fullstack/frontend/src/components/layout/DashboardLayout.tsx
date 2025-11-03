@@ -44,9 +44,17 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
   useEffect(() => {
     // Update currentTab based on current path
     if (isClient()) {
-      const path = window.location.pathname;
-      const tabs = ['/dashboard', '/dashboard/civic-actions'];
-      const matched = tabs.find(t => path === t || path.startsWith(t + '/')) || false;
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+      const rawPath = window.location.pathname;
+      const path = basePath ? rawPath.replace(basePath, '') : rawPath;
+      let matched: string | false = false;
+      if (path === '/dashboard') {
+        matched = '/dashboard';
+      } else if (path === '/dashboard/civic-actions' || path.startsWith('/dashboard/civic-actions/')) {
+        matched = '/dashboard/civic-actions';
+      } else {
+        matched = false; // Do not highlight a tab for other dashboard subpages (e.g., settings, profile)
+      }
       setCurrentTab(matched);
     }
   }, []);

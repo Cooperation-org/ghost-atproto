@@ -2,6 +2,7 @@
 
 import { formatDateForDisplay } from '@/lib/hydration-utils';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Grid,
   Paper,
@@ -21,6 +22,7 @@ import { api } from '@/lib/api';
 import { Post } from '@/lib/types';
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
