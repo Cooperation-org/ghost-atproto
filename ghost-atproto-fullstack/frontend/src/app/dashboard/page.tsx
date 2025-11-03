@@ -124,11 +124,15 @@ export default function DashboardPage() {
                     }
                   }}
                 >
-                  {/* Featured Image Placeholder */}
+                  {/* Featured Image (fallback to gradient when missing) */}
                   <Box
                     sx={{
                       height: 200,
-                      background: gradient,
+                      background: post.featureImage
+                        ? `url(${post.featureImage})`
+                        : gradient,
+                      backgroundSize: post.featureImage ? 'cover' : undefined,
+                      backgroundPosition: post.featureImage ? 'center' : undefined,
                       position: 'relative',
                       display: 'flex',
                       alignItems: 'center',
@@ -163,8 +167,10 @@ export default function DashboardPage() {
                       )}
                     </Box>
                     
-                    {/* Article Icon */}
-                    <ArticleIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.3)' }} />
+                    {/* Placeholder icon only when no image */}
+                    {!post.featureImage && (
+                      <ArticleIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.3)' }} />
+                    )}
                   </Box>
 
                   <CardContent sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column' }}>
