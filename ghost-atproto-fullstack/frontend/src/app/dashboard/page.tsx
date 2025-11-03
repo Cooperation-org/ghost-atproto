@@ -2,6 +2,7 @@
 
 import { formatDateForDisplay } from '@/lib/hydration-utils';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Grid,
   Paper,
@@ -21,6 +22,7 @@ import { api } from '@/lib/api';
 import { Post } from '@/lib/types';
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -124,11 +126,15 @@ export default function DashboardPage() {
                     }
                   }}
                 >
-                  {/* Featured Image Placeholder */}
+                  {/* Featured Image (fallback to gradient when missing) */}
                   <Box
                     sx={{
                       height: 200,
-                      background: gradient,
+                      background: post.featureImage
+                        ? `url(${post.featureImage})`
+                        : gradient,
+                      backgroundSize: post.featureImage ? 'cover' : undefined,
+                      backgroundPosition: post.featureImage ? 'center' : undefined,
                       position: 'relative',
                       display: 'flex',
                       alignItems: 'center',
@@ -163,8 +169,10 @@ export default function DashboardPage() {
                       )}
                     </Box>
                     
-                    {/* Article Icon */}
-                    <ArticleIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.3)' }} />
+                    {/* Placeholder icon only when no image */}
+                    {!post.featureImage && (
+                      <ArticleIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.3)' }} />
+                    )}
                   </Box>
 
                   <CardContent sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column' }}>
