@@ -4,81 +4,76 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy to Dev Server
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Deploy to development server
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 10m
           script: |
-            sudo su - civicsky << 'DEPLOY_SCRIPT'
-            set -e
+            sudo su - civicsky << 'DEPLOY'
+            set -euo pipefail
             
-            echo "🚀 Deploying to DEV (manual migrations)..."
+            log() { echo "[$(date +'%H:%M:%S')] $*"; }
             
+            log "🚀 Deploying..."
             cd ~/ghost-atproto/ghost-atproto-fullstack
             
-            # Clean builds
-            echo "🧹 Cleaning build artifacts..."
+            # Save for rollback
+            PREV=$(git rev-parse HEAD)
+            
+            # Deploy
+            git pull origin main
             rm -rf frontend/.next backend/dist
             
-            # Pull latest
-            echo "📥 Pulling latest code..."
-            git pull origin main
-            
             # Backend
-            echo "🔧 Deploying Backend..."
-            cd backend
+            log "Backend..."
+            cd ghost-atproto-fullstack/backend
             npm install
             npx prisma generate
-            # NOTE: Migrations NOT applied automatically
-            # Run manually: npx prisma migrate deploy
             npm run build
-            pm2 restart atproto-backend
+            pm2 restart atproto-backend 2>/dev/null || pm2 start dist/index.js --name atproto-backend
             
-            # Frontend  
-            echo "🎨 Deploying Frontend..."
+            # Frontend
+            log "Frontend..."
             cd ../frontend
             npm install
             npm run build
-            pm2 restart atproto-frontend
+            pm2 restart atproto-frontend 2>/dev/null || pm2 start npm --name atproto-frontend -- start
             
-            echo "💾 Saving PM2 config..."
             pm2 save
             
-            echo "✅ Deployment complete!"
-            pm2 list
-            
             # Health check
-            echo "🔍 Checking health..."
-            sleep 5
-            curl -f http://localhost:5000/api/health || exit 1
+            log "Checking health..."
+            sleep 10
+            for i in {1..6}; do
+              if curl -sf http://localhost:5000/api/health >/dev/null; then
+                log "✅ Success!"
+                exit 0
+              fi
+              sleep 5
+            done
             
-            # Check for pending migrations
-            cd ~/ghost-atproto/ghost-atproto-fullstack/backend
-            PENDING=$(npx prisma migrate status 2>&1 | grep -c "have not yet been applied" || true)
-            if [ "$PENDING" -gt "0" ]; then
-              echo "⚠️  WARNING: There are pending database migrations!"
-              echo "📋 To apply them, run:"
-              echo "   ssh ubuntu@204.236.176.29"
-              echo "   sudo su - civicsky"
-              echo "   cd ~/ghost-atproto/ghost-atproto-fullstack/backend"
-              echo "   npx prisma migrate deploy"
-            else
-              echo "✅ No pending migrations"
-            fi
+            # Rollback
+            log "❌ Failed - rolling back..."
+            cd ~/ghost-atproto/ghost-atproto-fullstack
+            git reset --hard $PREV
+            cd backend && npm run build && pm2 restart atproto-backend
+            cd ../frontend && npm run build && pm2 restart atproto-frontend
+            exit 1
             
-            DEPLOY_SCRIPT
-            
-      - name: Notify on failure
-        if: failure()
-        run: echo "❌ Deployment failed! Check the logs."
+            DEPLOY

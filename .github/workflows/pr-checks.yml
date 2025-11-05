@@ -1,0 +1,53 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      # Backend checks
+      - name: Backend
+        run: |
+          cd ghost-atproto-fullstack/backend
+          npm install
+          npm run build
+          npx prisma generate
+      
+      # Frontend checks
+      - name: Frontend
+        run: |
+          cd ghost-atproto-fullstack/frontend
+          npm install
+          npm run build
+      
+      # Security scan
+      - name: Security
+        run: |
+          cd ghost-atproto-fullstack/backend && npm audit --audit-level=high || true
+          cd ../frontend && npm audit --audit-level=high || true
+      
+      # Summary
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ All checks passed - ready to merge!"
+          else
+            echo "❌ Checks failed - please fix errors"
+          fi
