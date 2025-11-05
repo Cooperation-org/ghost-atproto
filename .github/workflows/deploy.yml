@@ -31,12 +31,10 @@ jobs:
             log() { echo "[$(date +'%H:%M:%S')] $*"; }
             
             log "🚀 Deploying..."
-            cd ~/ghost-atproto/ghost-atproto-fullstack || { log "❌ Failed to cd to project directory"; exit 1; }
-            log "Current directory: $(pwd)"
+            cd ~/ghost-atproto/ghost-atproto-fullstack
             
             # Save for rollback
             PREV=$(git rev-parse HEAD)
-            log "Previous commit: $PREV"
             
             # Deploy
             git pull origin main
@@ -44,45 +42,45 @@ jobs:
             
             # Backend
             log "Backend..."
-            cd backend || { log "❌ Failed to cd to backend"; exit 1; }
-            npm install || { log "❌ Backend npm install failed"; exit 1; }
-            npx prisma generate || { log "❌ Prisma generate failed"; exit 1; }
-            npm run build || { log "❌ Backend build failed"; exit 1; }
-            pm2 restart atproto-backend 2>/dev/null || pm2 start dist/index.js --name atproto-backend || { log "❌ Failed to start backend"; exit 1; }
-            log "✅ Backend started/restarted"
+            cd backend
+            npm install
+            npx prisma generate
+            npm run build
+            pm2 restart atproto-backend 2>/dev/null || pm2 start dist/index.js --name atproto-backend
             
             # Frontend
             log "Frontend..."
-            cd ../frontend || { log "❌ Failed to cd to frontend"; exit 1; }
-            log "Frontend directory: $(pwd)"
-            npm install || { log "❌ Frontend npm install failed"; exit 1; }
-            npm run build || { log "❌ Frontend build failed"; exit 1; }
-            FRONTEND_DIR=$(pwd)
-            pm2 restart atproto-frontend 2>/dev/null || (cd "$FRONTEND_DIR" && pm2 start npm --name atproto-frontend -- start) || { log "❌ Failed to start frontend"; exit 1; }
-            log "✅ Frontend started/restarted"
+            cd ../frontend
+            npm install
+            npm run build
+            pm2 restart atproto-frontend 2>/dev/null || pm2 start npm --name atproto-frontend -- start
             
             pm2 save
-            log "✅ PM2 config saved"
             
             # Health check
             log "Checking health..."
             sleep 10
+            
+            HEALTH_PASSED=0
             for i in {1..6}; do
               if curl -sf http://localhost:5000/api/health >/dev/null 2>&1; then
                 log "✅ Health check passed!"
-                exit 0
+                HEALTH_PASSED=1
+                break
               fi
-              log "⏳ Health check attempt $i/6 failed, retrying..."
+              log "⏳ Attempt $i/6..."
               sleep 5
             done
-            log "❌ Health check failed after 6 attempts"
             
-            # Rollback
-            log "❌ Failed - rolling back..."
-            cd ~/ghost-atproto/ghost-atproto-fullstack
-            git reset --hard $PREV
-            cd backend && npm run build && pm2 restart atproto-backend
-            cd ../frontend && npm run build && pm2 restart atproto-frontend
-            exit 1
+            if [ $HEALTH_PASSED -eq 0 ]; then
+              log "❌ Health check failed - rolling back..."
+              cd ~/ghost-atproto/ghost-atproto-fullstack
+              git reset --hard $PREV
+              cd backend && npm run build && pm2 restart atproto-backend
+              cd ../frontend && npm run build && pm2 restart atproto-frontend
+              exit 1
+            fi
+            
+            log "🎉 Deployment successful!"
             
             DEPLOY
