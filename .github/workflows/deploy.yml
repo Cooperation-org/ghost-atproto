@@ -31,10 +31,12 @@ jobs:
             log() { echo "[$(date +'%H:%M:%S')] $*"; }
             
             log "🚀 Deploying..."
-            cd ~/ghost-atproto/ghost-atproto-fullstack
+            cd ~/ghost-atproto/ghost-atproto-fullstack || { log "❌ Failed to cd to project directory"; exit 1; }
+            log "Current directory: $(pwd)"
             
             # Save for rollback
             PREV=$(git rev-parse HEAD)
+            log "Previous commit: $PREV"
             
             # Deploy
             git pull origin main
@@ -42,31 +44,38 @@ jobs:
             
             # Backend
             log "Backend..."
-            cd backend
-            npm install
-            npx prisma generate
-            npm run build
-            pm2 restart atproto-backend 2>/dev/null || pm2 start dist/index.js --name atproto-backend
+            cd backend || { log "❌ Failed to cd to backend"; exit 1; }
+            npm install || { log "❌ Backend npm install failed"; exit 1; }
+            npx prisma generate || { log "❌ Prisma generate failed"; exit 1; }
+            npm run build || { log "❌ Backend build failed"; exit 1; }
+            pm2 restart atproto-backend 2>/dev/null || pm2 start dist/index.js --name atproto-backend || { log "❌ Failed to start backend"; exit 1; }
+            log "✅ Backend started/restarted"
             
             # Frontend
             log "Frontend..."
-            cd ../frontend
-            npm install
-            npm run build
-            pm2 restart atproto-frontend 2>/dev/null || pm2 start npm --name atproto-frontend -- start
+            cd ../frontend || { log "❌ Failed to cd to frontend"; exit 1; }
+            log "Frontend directory: $(pwd)"
+            npm install || { log "❌ Frontend npm install failed"; exit 1; }
+            npm run build || { log "❌ Frontend build failed"; exit 1; }
+            FRONTEND_DIR=$(pwd)
+            pm2 restart atproto-frontend 2>/dev/null || (cd "$FRONTEND_DIR" && pm2 start npm --name atproto-frontend -- start) || { log "❌ Failed to start frontend"; exit 1; }
+            log "✅ Frontend started/restarted"
             
             pm2 save
+            log "✅ PM2 config saved"
             
             # Health check
             log "Checking health..."
             sleep 10
             for i in {1..6}; do
-              if curl -sf http://localhost:5000/api/health >/dev/null; then
-                log "✅ Success!"
+              if curl -sf http://localhost:5000/api/health >/dev/null 2>&1; then
+                log "✅ Health check passed!"
                 exit 0
               fi
+              log "⏳ Health check attempt $i/6 failed, retrying..."
               sleep 5
             done
+            log "❌ Health check failed after 6 attempts"
             
             # Rollback
             log "❌ Failed - rolling back..."
