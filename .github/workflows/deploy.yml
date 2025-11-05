@@ -42,7 +42,7 @@ jobs:
             
             # Backend
             log "Backend..."
-            cd ghost-atproto-fullstack/backend
+            cd backend
             npm install
             npx prisma generate
             npm run build
