@@ -99,14 +99,11 @@ class ApiClient {
         error = JSON.parse(errorText);
       } catch {
         error = {
-          error: 'An error occurred',
-          message: `HTTP ${response.status}: ${response.statusText} - ${errorText}`
+          error: `HTTP ${response.status}: ${response.statusText} - ${errorText}`
         };
       }
       
-      // Include both error and message if available
-      const errorMessage = error.message || error.error || 'An error occurred';
-      throw new Error(errorMessage);
+      throw new Error(error.error || 'An error occurred');
     }
 
     return response.json();
