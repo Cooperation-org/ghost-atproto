@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,46 +7,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  USER
-  AUTHOR
-  ADMIN
-}
-
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String   // Hashed password
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Authorization
-  role Role @default(USER)
-
-  // NEW: Add these Bluesky fields
-  blueskyHandle      String? @map("bluesky_handle")
-  blueskyPassword    String? @map("bluesky_password")
-  blueskyDid         String? // Decentralized identifier
-
-  // Ghost integration (supports any Ghost server)
-  // Ghost fields
-  ghostApiKey        String? @map("ghost_api_key")
-  ghostUrl           String? @map("ghost_url")
-  ghostWebhookId     String? @map("ghost_webhook_id")
-  
-  // NEW: Add Ghost Content API Key
-  ghostContentApiKey String? @map("ghost_content_api_key")
-  
-  // Auto-sync settings
-  autoSync Boolean @default(true) @map("auto_sync")
-
-  // Relations
-  posts         Post[]
-  syncLogs      SyncLog[]
-  oauthSessions OAuthSession[]
-  submittedCivicActions CivicAction[] @relation("SubmittedActions")
-  reviewedCivicActions  CivicAction[] @relation("ReviewedActions")
+  id                    String         @id @default(cuid())
+  email                 String         @unique
+  name                  String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  blueskyHandle         String?        @map("bluesky_handle")
+  blueskyPassword       String?        @map("bluesky_password")
+  blueskyDid            String?
+  ghostApiKey           String?        @map("ghost_api_key")
+  ghostUrl              String?        @map("ghost_url")
+  ghostWebhookId        String?        @map("ghost_webhook_id")
+  ghostContentApiKey    String?        @map("ghost_content_api_key")
+  password              String
+  role                  Role           @default(USER)
+  autoSync              Boolean        @default(true) @map("auto_sync")
+  reviewedCivicActions  CivicAction[]  @relation("ReviewedActions")
+  submittedCivicActions CivicAction[]  @relation("SubmittedActions")
+  oauthSessions         OAuthSession[]
+  posts                 Post[]
+  syncLogs              SyncLog[]
 
   @@map("users")
 }
@@ -57,81 +35,61 @@ model User {
 model OAuthSession {
   id           String   @id @default(cuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // OAuth tokens
   accessToken  String   @db.Text
   refreshToken String   @db.Text
   tokenType    String   @default("DPoP")
-
-  // DPoP key (for token binding)
-  dpopKeyJwk   String   @db.Text // JSON Web Key for DPoP
-
-  // Session metadata
-  sub          String   // Subject (DID)
-  scope        String?  // Granted scopes
+  dpopKeyJwk   String   @db.Text
+  sub          String
+  scope        String?
   expiresAt    DateTime
-
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId], map: "oauth_sessions_userId_fkey")
   @@map("oauth_sessions")
 }
 
 model Post {
-  id           String @id @default(cuid())
+  id           String    @id @default(cuid())
   title        String
-  content      String @db.Text
-  excerpt      String? @db.Text
+  content      String    @db.Text
+  excerpt      String?   @db.Text
   slug         String
-  status       String @default("draft") // draft, published, scheduled
+  status       String    @default("draft")
   featureImage String?
+  ghostId      String?   @unique
+  ghostSlug    String?
+  ghostUrl     String?
+  atprotoUri   String?
+  atprotoCid   String?
+  publishedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Ghost data
-  ghostId   String? @unique
-  ghostSlug String?
-  ghostUrl  String?
-
-  // ATProto data
-  atprotoUri String?
-  atprotoCid String?
-
-  // Metadata
-  publishedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relations
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  @@index([userId], map: "posts_userId_fkey")
   @@map("posts")
 }
 
 model SyncLog {
-  id     String @id @default(cuid())
-  action String // "publish", "update", "delete"
-  status String // "success", "error", "pending"
-  source String // "ghost", "atproto"
-  target String // "ghost", "atproto"
-
-  // References
+  id         String   @id @default(cuid())
+  action     String
+  status     String
+  source     String
+  target     String
   postId     String?
   ghostId    String?
   atprotoUri String?
+  error      String?  @db.Text
+  retryCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Error handling
-  error      String? @db.Text
-  retryCount Int     @default(0)
-
-  // Metadata
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  @@index([userId], map: "sync_logs_userId_fkey")
   @@map("sync_logs")
 }
 
@@ -146,31 +104,31 @@ model Settings {
 }
 
 model CivicAction {
-  id          String   @id @default(cuid())
-  title       String
-  description String   @db.Text
-  eventType   String?  @map("event_type")
-  location    String?
-  eventDate   DateTime? @map("event_date")
-  imageUrl    String?  @db.LongText @map("image_url")
-  
-  // Submission status
-  status      String   @default("pending") // pending, approved, rejected
-  isPinned    Boolean  @default(false) @map("is_pinned")
-  
-  // Review
-  reviewedBy  String?  @map("reviewed_by")
-  reviewer    User?    @relation("ReviewedActions", fields: [reviewedBy], references: [id])
-  reviewedAt  DateTime? @map("reviewed_at")
-  rejectionReason String? @db.Text @map("rejection_reason")
-  
-  // Metadata
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // Relations
-  userId      String
-  user        User     @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
-  
+  id              String    @id @default(cuid())
+  title           String
+  description     String    @db.Text
+  eventType       String?   @map("event_type")
+  location        String?
+  eventDate       DateTime? @map("event_date")
+  status          String    @default("pending")
+  isPinned        Boolean   @default(false) @map("is_pinned")
+  reviewedBy      String?   @map("reviewed_by")
+  reviewedAt      DateTime? @map("reviewed_at")
+  rejectionReason String?   @map("rejection_reason") @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  userId          String
+  imageUrl        String?   @map("image_url") @db.LongText
+  reviewer        User?     @relation("ReviewedActions", fields: [reviewedBy], references: [id])
+  user            User      @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([reviewedBy], map: "civic_actions_reviewed_by_fkey")
+  @@index([userId], map: "civic_actions_userId_fkey")
   @@map("civic_actions")
+}
+
+enum Role {
+  USER
+  AUTHOR
+  ADMIN
 }

@@ -31,8 +31,19 @@ export function setupGoogleOAuth() {
             return done(new Error('No email found in Google profile'));
           }
 
-          // Check if user exists with this email
-          let user = await prisma.user.findUnique({ where: { email } });
+          // Check if user exists with this email - use select to avoid schema mismatch
+          let user = await prisma.user.findUnique({ 
+            where: { email },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              role: true,
+              password: true,
+              createdAt: true,
+              updatedAt: true,
+            }
+          });
 
           if (!user) {
             // Create new user for Google OAuth
@@ -43,6 +54,15 @@ export function setupGoogleOAuth() {
                 role: 'USER',
                 password: '', // OAuth users don't need password
               },
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                password: true,
+                createdAt: true,
+                updatedAt: true,
+              }
             });
           } else {
             // Update existing user's name if needed
@@ -50,6 +70,15 @@ export function setupGoogleOAuth() {
               user = await prisma.user.update({
                 where: { id: user.id },
                 data: { name },
+                select: {
+                  id: true,
+                  email: true,
+                  name: true,
+                  role: true,
+                  password: true,
+                  createdAt: true,
+                  updatedAt: true,
+                }
               });
             }
           }
@@ -134,7 +163,18 @@ export function setupGoogleOAuth() {
   // Deserialize user from session
   passport.deserializeUser(async (id: string, done) => {
     try {
-      const user = await prisma.user.findUnique({ where: { id } });
+      const user = await prisma.user.findUnique({ 
+        where: { id },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          password: true,
+          createdAt: true,
+          updatedAt: true,
+        }
+      });
       done(null, user);
     } catch (error) {
       done(error);

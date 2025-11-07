@@ -49,7 +49,10 @@ function LoginPageContent() {
   // Load OAuth config
   useEffect(() => {
     api.getOAuthConfig()
-      .then(setOauthConfig)
+      .then((config) => {
+        console.log('[Login] OAuth config received:', config);
+        setOauthConfig(config);
+      })
       .catch((err) => {
         console.error('Failed to load OAuth config:', err);
         // Set default config if backend is not available
