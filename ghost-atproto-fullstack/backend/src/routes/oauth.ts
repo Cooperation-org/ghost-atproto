@@ -19,10 +19,41 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 router.get('/google', (req, res, next) => {
   // Make callback URL dynamic based on request origin
   const requestHost = req.get('host') || req.get('x-forwarded-host') || 'localhost:5000';
-  const requestProtocol = req.get('x-forwarded-proto') || req.protocol || 'http';
+  
+  // Detect protocol - prioritize x-forwarded-proto (set by nginx/proxy)
+  // Also check if the original request was secure
+  let requestProtocol = req.get('x-forwarded-proto');
+  
+  // If not set by proxy, check other indicators
+  if (!requestProtocol) {
+    // Check if connection was secure
+    if (req.secure || req.get('x-forwarded-ssl') === 'on') {
+      requestProtocol = 'https';
+    } else {
+      // Check if host indicates HTTPS (common domains)
+      const host = requestHost.toLowerCase();
+      if (host.includes('linkedtrust.us') || host.includes('bridge.linkedtrust.us')) {
+        requestProtocol = 'https';
+      } else {
+        requestProtocol = req.protocol || 'http';
+      }
+    }
+  }
+  
+  // Normalize protocol (remove trailing slash, ensure lowercase)
+  requestProtocol = requestProtocol?.toLowerCase().replace(/\/$/, '') || 'https';
+  
   const dynamicCallbackURL = `${requestProtocol}://${requestHost}/api/auth/google/callback`;
   
-  console.log('[Google OAuth] Dynamic callback URL:', dynamicCallbackURL);
+  console.log('[Google OAuth] Request headers:', {
+    host: requestHost,
+    'x-forwarded-proto': req.get('x-forwarded-proto'),
+    'x-forwarded-host': req.get('x-forwarded-host'),
+    protocol: req.protocol,
+    secure: req.secure,
+    detectedProtocol: requestProtocol,
+    callbackURL: dynamicCallbackURL
+  });
   
   // Manually construct Google OAuth URL with dynamic callback
   const params = new URLSearchParams({
@@ -56,10 +87,43 @@ router.get('/google/callback', async (req, res) => {
       return res.redirect(`${frontendUrl}/login?error=no_code`);
     }
 
-    // Get dynamic callback URL from request
+    // Get dynamic callback URL from request (must match the one used in /google route)
     const requestHost = req.get('host') || req.get('x-forwarded-host') || 'localhost:5000';
-    const requestProtocol = req.get('x-forwarded-proto') || req.protocol || 'http';
+    
+    // Detect protocol - prioritize x-forwarded-proto (set by nginx/proxy)
+    // Also check if the original request was secure
+    let requestProtocol = req.get('x-forwarded-proto');
+    
+    // If not set by proxy, check other indicators
+    if (!requestProtocol) {
+      // Check if connection was secure
+      if (req.secure || req.get('x-forwarded-ssl') === 'on') {
+        requestProtocol = 'https';
+      } else {
+        // Check if host indicates HTTPS (common domains)
+        const host = requestHost.toLowerCase();
+        if (host.includes('linkedtrust.us') || host.includes('bridge.linkedtrust.us')) {
+          requestProtocol = 'https';
+        } else {
+          requestProtocol = req.protocol || 'http';
+        }
+      }
+    }
+    
+    // Normalize protocol (remove trailing slash, ensure lowercase)
+    requestProtocol = requestProtocol?.toLowerCase().replace(/\/$/, '') || 'https';
+    
     const dynamicCallbackURL = `${requestProtocol}://${requestHost}/api/auth/google/callback`;
+    
+    console.log('[Google OAuth Callback] Request headers:', {
+      host: requestHost,
+      'x-forwarded-proto': req.get('x-forwarded-proto'),
+      'x-forwarded-host': req.get('x-forwarded-host'),
+      protocol: req.protocol,
+      secure: req.secure,
+      detectedProtocol: requestProtocol,
+      callbackURL: dynamicCallbackURL
+    });
 
     // Exchange authorization code for access token
     console.log('[Google OAuth] Exchanging code for token...');
