@@ -33,6 +33,10 @@ let oauthClient: NodeOAuthClient | null = null;
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+// Trust proxy - required for x-forwarded-proto to work correctly behind nginx
+// This allows Express to trust the X-Forwarded-* headers set by nginx
+app.set('trust proxy', true);
+
 // Middleware
 app.use(morgan('dev'));
 
