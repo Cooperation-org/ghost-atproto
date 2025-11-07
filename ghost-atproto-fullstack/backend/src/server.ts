@@ -198,10 +198,10 @@ async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
 
   // Try OAuth first
   if (user.oauthSessions.length > 0 && oauthClient) {
-    const session = user.oauthSessions[0];
+    const session = user.oauthSessions[0] as any; // Type assertion for OAuthSession with expiresAt
     try {
-      // Check if token is expired
-      if (session.expiresAt > new Date()) {
+      // Check if token is expired (expiresAt should exist on OAuthSession)
+      if (session.expiresAt && new Date(session.expiresAt) > new Date()) {
         const agent = new BskyAgent({ service: process.env.ATPROTO_SERVICE || 'https://bsky.social' });
         // TODO: Implement DPoP token usage with OAuth client
         // For now, this is a placeholder for OAuth token restoration
@@ -919,6 +919,9 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 // Signup route: create user with chosen role
 app.post('/api/auth/signup', async (req, res) => {
   try {
+    console.log('[Signup] Raw request body:', req.body);
+    console.log('[Signup] Content-Type:', req.get('content-type'));
+    
     const { email, name, password, role } = req.body as { 
       email?: string; 
       name?: string; 
@@ -926,37 +929,64 @@ app.post('/api/auth/signup', async (req, res) => {
       role?: 'USER' | 'AUTHOR' | 'ADMIN' 
     };
 
+    console.log('[Signup] Parsed body:', { email, name, role, hasPassword: !!password, passwordLength: password?.length });
+
     if (!email || !password) {
+      console.log('[Signup] Validation failed: missing email or password');
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
     if (password.length < 6) {
+      console.log('[Signup] Validation failed: password too short');
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
     // Ensure email unique
-    const existing = await prisma.user.findUnique({ where: { email } });
+    console.log('[Signup] Checking if email exists...');
+    const existing = await prisma.user.findUnique({ 
+      where: { email },
+      select: { id: true, email: true }
+    });
     if (existing) {
+      console.log('[Signup] Email already exists:', existing.email);
       return res.status(400).json({ error: 'Email already registered' });
     }
+    console.log('[Signup] Email is unique');
 
     // Validate role - ADMIN cannot be created via signup
     const normalizedRole = (role || 'USER').toUpperCase();
     if (!['USER', 'AUTHOR'].includes(normalizedRole)) {
+      console.log('[Signup] Validation failed: invalid role', normalizedRole);
       return res.status(400).json({ error: 'Invalid role. Use USER or AUTHOR.' });
     }
+    console.log('[Signup] Role validated:', normalizedRole);
 
     // Hash password
+    console.log('[Signup] Hashing password...');
     const hashedPassword = await bcrypt.hash(password, 10);
+    console.log('[Signup] Password hashed');
 
+    // Create user with only fields that exist in the database
+    console.log('[Signup] Creating user...');
     const user = await prisma.user.create({
       data: {
         email,
         name: name || email.split('@')[0],
         password: hashedPassword,
         role: normalizedRole as any,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        blueskyHandle: true,
+        ghostUrl: true,
+        createdAt: true,
+        updatedAt: true,
       }
     });
+    console.log('[Signup] User created successfully:', user.id);
 
     // Generate JWT token
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
@@ -979,9 +1009,32 @@ app.post('/api/auth/signup', async (req, res) => {
       },
       token
     });
-  } catch (error) {
-    console.error('Signup error:', error);
-    res.status(500).json({ error: 'Signup failed' });
+  } catch (error: any) {
+    console.error('[Signup] Error details:', {
+      code: error.code,
+      message: error.message,
+      meta: error.meta,
+      stack: error.stack
+    });
+    
+    // Provide more detailed error message
+    if (error.code === 'P2002') {
+      console.log('[Signup] Prisma unique constraint violation - email already exists');
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+    if (error.code === 'P2022') {
+      console.log('[Signup] Prisma column not found error');
+      return res.status(500).json({ 
+        error: 'Database schema mismatch. Please run migrations.',
+        details: error.meta?.column || 'Unknown column'
+      });
+    }
+    console.log('[Signup] Unknown error, returning 500');
+    res.status(500).json({ 
+      error: 'Signup failed',
+      message: error.message || 'Unknown error',
+      code: error.code || 'UNKNOWN'
+    });
   }
 });
 
@@ -1309,14 +1362,7 @@ app.get('/api/users/:id', async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id },
       include: {
-        oauthSessions: {
-          select: {
-            id: true,
-            sub: true,
-            expiresAt: true,
-            createdAt: true,
-          }
-        }
+        oauthSessions: true
       }
     });
 

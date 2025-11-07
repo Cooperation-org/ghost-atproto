@@ -3,6 +3,7 @@ import passport from 'passport';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { initiateBlueskyLogin, handleBlueskyCallback, getBlueskyOAuthClient } from '../lib/bluesky-oauth';
+import { oauthConfig } from '../lib/oauth-config';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -33,21 +34,27 @@ router.get('/google/callback',
       const user = req.user as any;
 
       if (!user) {
-        return res.redirect('/login?error=no_user');
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/login?error=no_user`);
       }
 
       // Generate JWT token
       const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
 
-      // Set cookie
+      // Set cookie with proper settings for cross-origin
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      // Set cookie on backend domain
       res.cookie('token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
 
-      // Redirect to dashboard based on role
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      // Also pass token in URL for frontend to store in localStorage
+      // This is a fallback for cross-origin cookie issues
       let redirectPath = '/dashboard';
       if (user.role === 'ADMIN') {
         redirectPath = '/dashboard/civic-actions';
@@ -55,10 +62,12 @@ router.get('/google/callback',
         redirectPath = '/bridge/wizard';
       }
 
-      res.redirect(`${frontendUrl}${redirectPath}`);
+      // Redirect with token in URL - frontend will extract and store it
+      res.redirect(`${frontendUrl}${redirectPath}?token=${encodeURIComponent(token)}`);
     } catch (error) {
       console.error('Google OAuth callback error:', error);
-      res.redirect('/login?error=callback_failed');
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      res.redirect(`${frontendUrl}/login?error=callback_failed`);
     }
   }
 );
@@ -191,9 +200,60 @@ router.get('/bluesky/callback', async (req, res) => {
  * GET /api/auth/oauth/config
  */
 router.get('/oauth/config', (req, res) => {
+  const isGoogleEnabled = !!(oauthConfig.google.clientId && oauthConfig.google.clientSecret);
+  
+  // Get request origin/host - check multiple headers for proxy/load balancer scenarios
+  const requestHost = req.get('host') || req.get('x-forwarded-host') || '';
+  const requestProtocol = req.get('x-forwarded-proto') || req.get('x-forwarded-protocol') || req.protocol || 'http';
+  const requestOrigin = req.get('origin') || `${requestProtocol}://${requestHost}`;
+  
+  // Extract origin from callback URL
+  const callbackUrl = oauthConfig.google.callbackURL;
+  let callbackOrigin = '';
+  let callbackHost = '';
+  try {
+    const callbackUrlObj = new URL(callbackUrl);
+    callbackOrigin = callbackUrlObj.origin;
+    callbackHost = callbackUrlObj.host;
+  } catch (e) {
+    // Invalid URL, skip origin check
+  }
+  
+  // Debug logging (can be removed in production)
+  console.log('[OAuth Config] Request:', {
+    host: requestHost,
+    origin: requestOrigin,
+    protocol: requestProtocol,
+    callbackUrl,
+    callbackOrigin,
+    callbackHost,
+    hasCredentials: isGoogleEnabled
+  });
+  
+  // Google OAuth is enabled if:
+  // 1. Credentials exist
+  // 2. Callback URL matches request origin OR callback host matches request host
+  //    OR callback URL contains the request host
+  //    OR if no callback URL is explicitly set (uses default)
+  const googleEnabled = isGoogleEnabled && (
+    !callbackUrl || // No callback URL set (will use default)
+    callbackUrl === 'http://127.0.0.1:5000/api/auth/google/callback' || // Default callback URL
+    !callbackOrigin || // Invalid callback URL format
+    callbackOrigin === requestOrigin || // Exact match
+    callbackHost === requestHost || // Host matches
+    callbackUrl.includes(requestHost) || // Callback URL contains request host
+    // Specific checks for known domains/IPs
+    (callbackUrl.includes('204.236.176.29') && (requestHost.includes('204.236.176.29') || requestOrigin.includes('204.236.176.29'))) ||
+    (callbackUrl.includes('bridge.linkedtrust.us') && (requestHost.includes('bridge.linkedtrust.us') || requestOrigin.includes('bridge.linkedtrust.us'))) ||
+    // Allow if credentials exist and we're in development/localhost
+    (requestHost.includes('localhost') || requestHost.includes('127.0.0.1'))
+  );
+  
+  console.log('[OAuth Config] Google enabled:', googleEnabled);
+  
   res.json({
     google: {
-      enabled: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+      enabled: googleEnabled,
       buttonText: 'Continue with Google',
     },
     bluesky: {

@@ -13,7 +13,7 @@ export interface CivicActionDto {
 }
 
 // Use 127.0.0.1 instead of localhost for AT Protocol OAuth (RFC 8252 requirement)
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
 
 class ApiClient {
   private token: string | null = null;
@@ -21,7 +21,42 @@ class ApiClient {
   constructor() {
     // Load token from localStorage on client side
     if (isClient()) {
-      this.token = localStorage.getItem('token');
+      // Check if token is in URL (from OAuth redirect)
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('token');
+      
+      if (urlToken) {
+        // Store token from URL
+        localStorage.setItem('token', urlToken);
+        this.token = urlToken;
+        
+        // Remove token from URL to keep it clean
+        urlParams.delete('token');
+        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        window.history.replaceState({}, '', newUrl);
+      } else {
+        // Load from localStorage
+        this.token = localStorage.getItem('token');
+      }
+    }
+  }
+
+  // Method to extract and store token from URL (for OAuth redirects)
+  extractTokenFromUrl(): void {
+    if (isClient()) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('token');
+      
+      if (urlToken) {
+        // Store token from URL
+        localStorage.setItem('token', urlToken);
+        this.token = urlToken;
+        
+        // Remove token from URL to keep it clean
+        urlParams.delete('token');
+        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        window.history.replaceState({}, '', newUrl);
+      }
     }
   }
 
@@ -29,6 +64,9 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // Check for token in URL on each request (in case we just redirected)
+    this.extractTokenFromUrl();
+    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -49,10 +87,26 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error: ApiError = await response.json().catch(() => ({
-        error: 'An error occurred',
-      }));
-      throw new Error(error.error);
+      const errorText = await response.text().catch(() => 'Unable to read error response');
+      console.error(`[API] Request failed: ${endpoint}`, {
+        status: response.status,
+        statusText: response.statusText,
+        errorBody: errorText
+      });
+      
+      let error: ApiError;
+      try {
+        error = JSON.parse(errorText);
+      } catch {
+        error = {
+          error: 'An error occurred',
+          message: `HTTP ${response.status}: ${response.statusText} - ${errorText}`
+        };
+      }
+      
+      // Include both error and message if available
+      const errorMessage = error.message || error.error || 'An error occurred';
+      throw new Error(errorMessage);
     }
 
     return response.json();

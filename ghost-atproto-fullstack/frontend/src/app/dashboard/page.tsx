@@ -27,19 +27,26 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Extract token from URL if present (from OAuth redirect)
+    api.extractTokenFromUrl();
+    
     const loadData = async () => {
       try {
         const postsData = await api.getAllPosts(); // Get ALL posts from ALL users
         setPosts(postsData);
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
+        // If unauthorized, redirect to login
+        if (error instanceof Error && error.message.includes('401')) {
+          router.push('/login');
+        }
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, []);
+  }, [router]);
 
   if (loading) {
     return (
