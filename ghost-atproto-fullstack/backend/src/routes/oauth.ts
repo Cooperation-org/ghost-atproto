@@ -15,10 +15,21 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
  * Initiate Google OAuth flow
  * GET /api/auth/google
  */
-router.get('/google', passport.authenticate('google', {
-  scope: ['profile', 'email'],
-  session: false,
-}));
+router.get('/google', (req, res, next) => {
+  // Make callback URL dynamic based on request origin
+  const requestHost = req.get('host') || req.get('x-forwarded-host') || 'localhost:5000';
+  const requestProtocol = req.get('x-forwarded-proto') || req.protocol || 'http';
+  const dynamicCallbackURL = `${requestProtocol}://${requestHost}/api/auth/google/callback`;
+  
+  console.log('[Google OAuth] Dynamic callback URL:', dynamicCallbackURL);
+  
+  // Override callbackURL for this request
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    session: false,
+    callbackURL: dynamicCallbackURL,
+  })(req, res, next);
+});
 
 /**
  * Google OAuth callback
@@ -230,23 +241,15 @@ router.get('/oauth/config', (req, res) => {
     hasCredentials: isGoogleEnabled
   });
   
-  // Google OAuth is enabled if:
-  // 1. Credentials exist
-  // 2. Callback URL matches request origin OR callback host matches request host
-  //    OR callback URL contains the request host
-  //    OR if no callback URL is explicitly set (uses default)
+  // Google OAuth is enabled if credentials exist
+  // The callback URL validation is handled by Google Cloud Console
+  // We just need to ensure credentials are configured
+  // Note: Both callback URLs (for IP and domain) should be registered in Google Cloud Console
   const googleEnabled = isGoogleEnabled && (
-    !callbackUrl || // No callback URL set (will use default)
-    callbackUrl === 'http://127.0.0.1:5000/api/auth/google/callback' || // Default callback URL
-    !callbackOrigin || // Invalid callback URL format
-    callbackOrigin === requestOrigin || // Exact match
-    callbackHost === requestHost || // Host matches
-    callbackUrl.includes(requestHost) || // Callback URL contains request host
-    // Specific checks for known domains/IPs
-    (callbackUrl.includes('204.236.176.29') && (requestHost.includes('204.236.176.29') || requestOrigin.includes('204.236.176.29'))) ||
-    (callbackUrl.includes('bridge.linkedtrust.us') && (requestHost.includes('bridge.linkedtrust.us') || requestOrigin.includes('bridge.linkedtrust.us'))) ||
-    // Allow if credentials exist and we're in development/localhost
-    (requestHost.includes('localhost') || requestHost.includes('127.0.0.1'))
+    // If credentials exist, enable Google OAuth
+    // The callback URL will be validated by Google, not by us
+    // This allows the same backend to serve multiple domains/IPs
+    true
   );
   
   console.log('[OAuth Config] Google enabled:', googleEnabled);
