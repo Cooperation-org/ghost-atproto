@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { initiateBlueskyLogin, handleBlueskyCallback, getBlueskyOAuthClient } from '../lib/bluesky-oauth';
 import { oauthConfig } from '../lib/oauth-config';
+import axios from 'axios';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -23,65 +24,155 @@ router.get('/google', (req, res, next) => {
   
   console.log('[Google OAuth] Dynamic callback URL:', dynamicCallbackURL);
   
-  // Override callbackURL for this request
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    session: false,
-    callbackURL: dynamicCallbackURL,
-  })(req, res, next);
+  // Manually construct Google OAuth URL with dynamic callback
+  const params = new URLSearchParams({
+    client_id: oauthConfig.google.clientId,
+    redirect_uri: dynamicCallbackURL,
+    response_type: 'code',
+    scope: 'profile email',
+    access_type: 'offline',
+    prompt: 'consent',
+  });
+  
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  res.redirect(googleAuthUrl);
 });
 
 /**
  * Google OAuth callback
  * GET /api/auth/google/callback
  */
-router.get('/google/callback',
-  passport.authenticate('google', { 
-    failureRedirect: '/login?error=google_auth_failed',
-    session: false 
-  }),
-  (req, res) => {
-    try {
-      const user = req.user as any;
+router.get('/google/callback', async (req, res) => {
+  try {
+    const { code, error } = req.query;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-      if (!user) {
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        return res.redirect(`${frontendUrl}/login?error=no_user`);
-      }
-
-      // Generate JWT token
-      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-
-      // Set cookie with proper settings for cross-origin
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const isProduction = process.env.NODE_ENV === 'production';
-      
-      // Set cookie on backend domain
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'none' : 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-      });
-
-      // Also pass token in URL for frontend to store in localStorage
-      // This is a fallback for cross-origin cookie issues
-      let redirectPath = '/dashboard';
-      if (user.role === 'ADMIN') {
-        redirectPath = '/dashboard/civic-actions';
-      } else if (user.role === 'AUTHOR') {
-        redirectPath = '/bridge/wizard';
-      }
-
-      // Redirect with token in URL - frontend will extract and store it
-      res.redirect(`${frontendUrl}${redirectPath}?token=${encodeURIComponent(token)}`);
-    } catch (error) {
-      console.error('Google OAuth callback error:', error);
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      res.redirect(`${frontendUrl}/login?error=callback_failed`);
+    if (error) {
+      console.error('[Google OAuth] Error from Google:', error);
+      return res.redirect(`${frontendUrl}/login?error=google_auth_failed`);
     }
+
+    if (!code) {
+      return res.redirect(`${frontendUrl}/login?error=no_code`);
+    }
+
+    // Get dynamic callback URL from request
+    const requestHost = req.get('host') || req.get('x-forwarded-host') || 'localhost:5000';
+    const requestProtocol = req.get('x-forwarded-proto') || req.protocol || 'http';
+    const dynamicCallbackURL = `${requestProtocol}://${requestHost}/api/auth/google/callback`;
+
+    // Exchange authorization code for access token
+    console.log('[Google OAuth] Exchanging code for token...');
+    const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+      client_id: oauthConfig.google.clientId,
+      client_secret: oauthConfig.google.clientSecret,
+      code: code,
+      grant_type: 'authorization_code',
+      redirect_uri: dynamicCallbackURL,
+    });
+
+    const { access_token } = tokenResponse.data;
+
+    // Get user profile from Google
+    console.log('[Google OAuth] Fetching user profile...');
+    const profileResponse = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+      },
+    });
+
+    const profile = profileResponse.data;
+    const email = profile.email;
+    const name = profile.name;
+    const picture = profile.picture;
+
+    if (!email) {
+      return res.redirect(`${frontendUrl}/login?error=no_email`);
+    }
+
+    // Find or create user
+    let user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        password: true,
+        createdAt: true,
+        updatedAt: true,
+      }
+    });
+
+    if (!user) {
+      // Create new user for Google OAuth
+      user = await prisma.user.create({
+        data: {
+          email,
+          name,
+          role: 'USER',
+          password: '', // OAuth users don't need password
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          password: true,
+          createdAt: true,
+          updatedAt: true,
+        }
+      });
+    } else {
+      // Update existing user's name if needed
+      if (name && user.name !== name) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { name },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            password: true,
+            createdAt: true,
+            updatedAt: true,
+          }
+        });
+      }
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Set cookie with proper settings for cross-origin
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    // Set cookie on backend domain
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    // Also pass token in URL for frontend to store in localStorage
+    // This is a fallback for cross-origin cookie issues
+    let redirectPath = '/dashboard';
+    if (user.role === 'ADMIN') {
+      redirectPath = '/dashboard/civic-actions';
+    } else if (user.role === 'AUTHOR') {
+      redirectPath = '/bridge/wizard';
+    }
+
+    // Redirect with token in URL - frontend will extract and store it
+    res.redirect(`${frontendUrl}${redirectPath}?token=${encodeURIComponent(token)}`);
+  } catch (error: any) {
+    console.error('[Google OAuth] Callback error:', error);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/login?error=callback_failed`);
   }
-);
+});
 
 // ==================== Bluesky OAuth Routes ====================
 
