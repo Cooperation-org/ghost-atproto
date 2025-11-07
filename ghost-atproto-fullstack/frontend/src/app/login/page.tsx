@@ -48,13 +48,19 @@ function LoginPageContent() {
 
   // Load OAuth config
   useEffect(() => {
+    console.log('[Login] Fetching OAuth config...');
     api.getOAuthConfig()
       .then((config) => {
         console.log('[Login] OAuth config received:', config);
+        console.log('[Login] Google enabled:', config.google.enabled);
         setOauthConfig(config);
       })
       .catch((err) => {
-        console.error('Failed to load OAuth config:', err);
+        console.error('[Login] Failed to load OAuth config:', err);
+        console.error('[Login] Error details:', {
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined
+        });
         // Set default config if backend is not available
         setOauthConfig({
           google: { enabled: false, buttonText: 'Continue with Google' },

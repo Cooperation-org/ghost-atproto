@@ -13,7 +13,19 @@ export interface CivicActionDto {
 }
 
 // Use 127.0.0.1 instead of localhost for AT Protocol OAuth (RFC 8252 requirement)
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
+// In production, use absolute URLs based on current origin to avoid mixed content issues
+// In development, use the configured API URL or default to localhost
+const getApiBase = (): string => {
+  // Client-side: use absolute URL based on current origin to ensure HTTPS
+  // This prevents mixed content errors and works with nginx proxy
+  if (typeof window !== 'undefined') {
+    // Use the current origin (protocol + host) to ensure HTTPS is used
+    // This way it works on both IP and domain, and respects the current protocol
+    return window.location.origin;
+  }
+  // Server-side: use the configured API URL
+  return process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
+};
 
 class ApiClient {
   private token: string | null = null;
@@ -80,7 +92,12 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    // Build the full URL - use runtime check for client-side
+    const apiBase = getApiBase();
+    const url = apiBase ? `${apiBase}${endpoint}` : endpoint;
+    console.log(`[API] Making request to: ${url}`);
+
+    const response = await fetch(url, {
       ...options,
       headers,
       credentials: 'include', // Include cookies
@@ -88,10 +105,11 @@ class ApiClient {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unable to read error response');
-      console.error(`[API] Request failed: ${endpoint}`, {
+      console.error(`[API] Request failed: ${url}`, {
         status: response.status,
         statusText: response.statusText,
-        errorBody: errorText
+        errorBody: errorText,
+        endpoint
       });
       
       let error: ApiError;
@@ -168,7 +186,8 @@ class ApiClient {
 
   // For Google OAuth, just redirect to the backend route
   getGoogleOAuthUrl(): string {
-    return `${API_BASE}/api/auth/google`;
+    const base = getApiBase();
+    return `${base}/api/auth/google`;
   }
 
   async getMe(): Promise<User> {
@@ -237,7 +256,8 @@ class ApiClient {
   
   // PUBLIC: Get approved civic actions (no authentication required)
   async getPublicCivicActions(): Promise<CivicActionDto[]> {
-    const response = await fetch(`${API_BASE}/api/public/civic-actions`, {
+    const base = getApiBase();
+    const response = await fetch(`${base}/api/public/civic-actions`, {
       headers: {
         'Content-Type': 'application/json',
       },
@@ -256,7 +276,8 @@ class ApiClient {
 
   // PUBLIC: Get a single approved civic action by ID (no authentication required)
   async getPublicCivicActionById(id: string): Promise<CivicActionDto> {
-    const response = await fetch(`${API_BASE}/api/public/civic-actions/${id}`, {
+    const base = getApiBase();
+    const response = await fetch(`${base}/api/public/civic-actions/${id}`, {
       headers: {
         'Content-Type': 'application/json',
       },
