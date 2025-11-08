@@ -18,12 +18,27 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
  */
 router.get('/google', (req, res, next) => {
   // Make callback URL dynamic based on request origin
-  const requestHost = req.get('x-forwarded-host') || req.get('host') || 'localhost:5000';
-  
+  const xForwardedHost = req.get('x-forwarded-host');
+  const regularHost = req.get('host');
+  const requestHost = xForwardedHost || regularHost || 'localhost:5000';
+
+  console.log('[Google OAuth DEBUG] All headers:', {
+    'x-forwarded-host': xForwardedHost,
+    'host': regularHost,
+    'x-forwarded-proto': req.get('x-forwarded-proto'),
+    'x-forwarded-ssl': req.get('x-forwarded-ssl'),
+    'x-forwarded-for': req.get('x-forwarded-for'),
+    'origin': req.get('origin'),
+    'referer': req.get('referer'),
+    'protocol': req.protocol,
+    'secure': req.secure,
+    'selectedHost': requestHost
+  });
+
   // Detect protocol - prioritize x-forwarded-proto (set by nginx/proxy)
   // Also check if the original request was secure
   let requestProtocol = req.get('x-forwarded-proto');
-  
+
   // If not set by proxy, check other indicators
   if (!requestProtocol) {
     // Check if connection was secure
@@ -39,20 +54,17 @@ router.get('/google', (req, res, next) => {
       }
     }
   }
-  
+
   // Normalize protocol (remove trailing slash, ensure lowercase)
   requestProtocol = requestProtocol?.toLowerCase().replace(/\/$/, '') || 'https';
-  
+
   const dynamicCallbackURL = `${requestProtocol}://${requestHost}/api/auth/google/callback`;
-  
-  console.log('[Google OAuth] Request headers:', {
-    host: requestHost,
-    'x-forwarded-proto': req.get('x-forwarded-proto'),
-    'x-forwarded-host': req.get('x-forwarded-host'),
-    protocol: req.protocol,
-    secure: req.secure,
+
+  console.log('[Google OAuth] Final computed values:', {
     detectedProtocol: requestProtocol,
-    callbackURL: dynamicCallbackURL
+    detectedHost: requestHost,
+    callbackURL: dynamicCallbackURL,
+    trustProxy: req.app.get('trust proxy')
   });
   
   // Manually construct Google OAuth URL with dynamic callback
@@ -66,6 +78,10 @@ router.get('/google', (req, res, next) => {
   });
   
   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+  console.log('[Google OAuth] Redirecting to Google with URL:', googleAuthUrl);
+  console.log('[Google OAuth] redirect_uri parameter:', dynamicCallbackURL);
+
   res.redirect(googleAuthUrl);
 });
 
@@ -88,12 +104,27 @@ router.get('/google/callback', async (req, res) => {
     }
 
     // Get dynamic callback URL from request (must match the one used in /google route)
-    const requestHost = req.get('x-forwarded-host') || req.get('host') || 'localhost:5000';
-    
+    const xForwardedHost = req.get('x-forwarded-host');
+    const regularHost = req.get('host');
+    const requestHost = xForwardedHost || regularHost || 'localhost:5000';
+
+    console.log('[Google OAuth Callback DEBUG] All headers:', {
+      'x-forwarded-host': xForwardedHost,
+      'host': regularHost,
+      'x-forwarded-proto': req.get('x-forwarded-proto'),
+      'x-forwarded-ssl': req.get('x-forwarded-ssl'),
+      'x-forwarded-for': req.get('x-forwarded-for'),
+      'origin': req.get('origin'),
+      'referer': req.get('referer'),
+      'protocol': req.protocol,
+      'secure': req.secure,
+      'selectedHost': requestHost
+    });
+
     // Detect protocol - prioritize x-forwarded-proto (set by nginx/proxy)
     // Also check if the original request was secure
     let requestProtocol = req.get('x-forwarded-proto');
-    
+
     // If not set by proxy, check other indicators
     if (!requestProtocol) {
       // Check if connection was secure
@@ -109,20 +140,17 @@ router.get('/google/callback', async (req, res) => {
         }
       }
     }
-    
+
     // Normalize protocol (remove trailing slash, ensure lowercase)
     requestProtocol = requestProtocol?.toLowerCase().replace(/\/$/, '') || 'https';
-    
+
     const dynamicCallbackURL = `${requestProtocol}://${requestHost}/api/auth/google/callback`;
-    
-    console.log('[Google OAuth Callback] Request headers:', {
-      host: requestHost,
-      'x-forwarded-proto': req.get('x-forwarded-proto'),
-      'x-forwarded-host': req.get('x-forwarded-host'),
-      protocol: req.protocol,
-      secure: req.secure,
+
+    console.log('[Google OAuth Callback] Final computed values:', {
       detectedProtocol: requestProtocol,
-      callbackURL: dynamicCallbackURL
+      detectedHost: requestHost,
+      callbackURL: dynamicCallbackURL,
+      trustProxy: req.app.get('trust proxy')
     });
 
     // Exchange authorization code for access token
@@ -241,38 +269,72 @@ router.get('/google/callback', async (req, res) => {
 // ==================== Bluesky OAuth Routes ====================
 
 /**
- * Bluesky login - OAuth if configured, otherwise app password
- * POST /api/auth/bluesky
- * Body: { handle: "user.bsky.social", password?: "app-password" }
+ * Initiate Bluesky OAuth flow (AT Protocol OAuth)
+ * GET /api/auth/bluesky?handle=user.bsky.social
  */
-router.post('/bluesky', async (req, res) => {
+router.get('/bluesky', async (req, res) => {
   try {
-    const { handle, password } = req.body;
+    const { handle } = req.query;
 
-    if (!handle) {
-      return res.status(400).json({ 
-        error: 'Bluesky handle is required',
-        example: 'user.bsky.social' 
+    if (!handle || typeof handle !== 'string') {
+      return res.status(400).json({
+        error: 'Bluesky handle is required as query parameter',
+        example: '/api/auth/bluesky?handle=user.bsky.social'
       });
     }
 
-    // Try OAuth first (if configured for production)
+    // Check if OAuth is configured
     const oauthClient = getBlueskyOAuthClient();
-    if (oauthClient && !password) {
-      try {
-        const authUrl = await initiateBlueskyLogin(handle);
-        return res.json({ authUrl });
-      } catch (oauthError) {
-        console.log('OAuth not available, falling back to app password');
-      }
+    if (!oauthClient) {
+      return res.status(503).json({
+        error: 'Bluesky OAuth not configured',
+        hint: 'OAuth requires HTTPS and a production domain. Set APP_URL environment variable.',
+        developmentNote: 'For local development, use app password endpoint: POST /api/auth/bluesky/dev'
+      });
     }
 
-    // Fallback: App password authentication
-    if (!password) {
-      return res.status(400).json({ 
-        error: 'Bluesky app password is required for development',
-        hint: 'Generate an app password at https://bsky.app/settings/app-passwords',
-        needsPassword: true
+    try {
+      const authUrl = await initiateBlueskyLogin(handle);
+
+      // Redirect to Bluesky authorization
+      res.redirect(authUrl);
+    } catch (oauthError) {
+      console.error('Bluesky OAuth initiation failed:', oauthError);
+      return res.status(500).json({
+        error: 'Failed to initiate Bluesky OAuth',
+        message: oauthError instanceof Error ? oauthError.message : 'Unknown error'
+      });
+    }
+  } catch (error: any) {
+    console.error('Bluesky OAuth error:', error);
+    res.status(500).json({
+      error: 'Bluesky OAuth failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * Development-only: App password authentication
+ * POST /api/auth/bluesky/dev
+ * Body: { handle: "user.bsky.social", password: "app-password" }
+ */
+router.post('/bluesky/dev', async (req, res) => {
+  // Only allow in development
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({
+      error: 'App password authentication is disabled in production',
+      hint: 'Use OAuth: GET /api/auth/bluesky?handle=your.handle'
+    });
+  }
+
+  try {
+    const { handle, password } = req.body;
+
+    if (!handle || !password) {
+      return res.status(400).json({
+        error: 'Bluesky handle and app password are required',
+        hint: 'Generate an app password at https://bsky.app/settings/app-passwords'
       });
     }
 
@@ -302,7 +364,7 @@ router.post('/bluesky', async (req, res) => {
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // Development only
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
@@ -312,7 +374,7 @@ router.post('/bluesky', async (req, res) => {
       token,
     });
   } catch (error: any) {
-    console.error('Bluesky login error:', error);
+    console.error('Bluesky dev login error:', error);
     if (error.message?.includes('Invalid identifier or password')) {
       return res.status(401).json({ error: 'Invalid Bluesky credentials' });
     }
@@ -409,18 +471,23 @@ router.get('/oauth/config', (req, res) => {
   
   console.log('[OAuth Config] Google enabled:', googleEnabled);
   
+  // Check if Bluesky OAuth is configured
+  const blueskyOAuthClient = getBlueskyOAuthClient();
+  const isBlueskyOAuthEnabled = !!blueskyOAuthClient;
+
   res.json({
     google: {
       enabled: googleEnabled,
       buttonText: 'Continue with Google',
     },
     bluesky: {
-      enabled: true,
+      enabled: isBlueskyOAuthEnabled,
       buttonText: 'Continue with Bluesky',
       requiresHandle: true,
-      requiresPassword: true, // App passwords for development, OAuth for production
+      requiresPassword: false, // OAuth for login (app passwords only for posting permissions)
       handlePlaceholder: 'your-handle.bsky.social',
-      passwordPlaceholder: 'App Password',
+      oauthOnly: true,
+      devNote: !isBlueskyOAuthEnabled ? 'OAuth requires HTTPS domain. For local dev, use POST /api/auth/bluesky/dev' : undefined,
     },
   });
 });

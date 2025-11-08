@@ -1550,9 +1550,54 @@ app.get('/api/sync-logs', async (req, res) => {
 // PUBLIC: Get approved civic actions (no authentication required)
 app.get('/api/public/civic-actions', async (req, res) => {
   try {
+    const { q, location, includeExpired } = req.query;
+
+    // Build where clause
+    const whereClause: any = { status: 'approved' };
+
+    // Filter out expired events (unless explicitly requested)
+    if (includeExpired !== 'true') {
+      whereClause.OR = [
+        { eventDate: { gte: new Date() } },  // Future events
+        { eventDate: null }                   // Events without date
+      ];
+    }
+
+    // Keyword search in title and description
+    if (q && typeof q === 'string' && q.trim()) {
+      whereClause.OR = whereClause.OR || [];
+      const searchTerms = {
+        OR: [
+          { title: { contains: q.trim() } },
+          { description: { contains: q.trim() } }
+        ]
+      };
+
+      // Combine with date filter if it exists
+      if (whereClause.OR.length > 0 && includeExpired !== 'true') {
+        whereClause.AND = [
+          { OR: whereClause.OR },
+          searchTerms
+        ];
+        delete whereClause.OR;
+      } else {
+        whereClause.AND = [searchTerms];
+      }
+    }
+
+    // Location search (case-insensitive partial match)
+    if (location && typeof location === 'string' && location.trim()) {
+      if (!whereClause.AND) {
+        whereClause.AND = [];
+      }
+      whereClause.AND.push({
+        location: { contains: location.trim() }
+      });
+    }
+
     // Only show approved civic actions to public
     const civicActions = await prisma.civicAction.findMany({
-      where: { status: 'approved' },
+      where: whereClause,
       include: {
         user: {
           select: {
@@ -1563,6 +1608,7 @@ app.get('/api/public/civic-actions', async (req, res) => {
       },
       orderBy: [
         { isPinned: 'desc' },
+        { eventDate: 'asc' },    // Soonest events first
         { createdAt: 'desc' }
       ]
     });
