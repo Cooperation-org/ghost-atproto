@@ -18,7 +18,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
  */
 router.get('/google', (req, res, next) => {
   // Make callback URL dynamic based on request origin
-  const requestHost = req.get('host') || req.get('x-forwarded-host') || 'localhost:5000';
+  const requestHost = req.get('x-forwarded-host') || req.get('host') || 'localhost:5000';
   
   // Detect protocol - prioritize x-forwarded-proto (set by nginx/proxy)
   // Also check if the original request was secure
@@ -88,7 +88,7 @@ router.get('/google/callback', async (req, res) => {
     }
 
     // Get dynamic callback URL from request (must match the one used in /google route)
-    const requestHost = req.get('host') || req.get('x-forwarded-host') || 'localhost:5000';
+    const requestHost = req.get('x-forwarded-host') || req.get('host') || 'localhost:5000';
     
     // Detect protocol - prioritize x-forwarded-proto (set by nginx/proxy)
     // Also check if the original request was secure
@@ -367,9 +367,9 @@ router.get('/bluesky/callback', async (req, res) => {
  */
 router.get('/oauth/config', (req, res) => {
   const isGoogleEnabled = !!(oauthConfig.google.clientId && oauthConfig.google.clientSecret);
-  
+
   // Get request origin/host - check multiple headers for proxy/load balancer scenarios
-  const requestHost = req.get('host') || req.get('x-forwarded-host') || '';
+  const requestHost = req.get('x-forwarded-host') || req.get('host') || '';
   const requestProtocol = req.get('x-forwarded-proto') || req.get('x-forwarded-protocol') || req.protocol || 'http';
   const requestOrigin = req.get('origin') || `${requestProtocol}://${requestHost}`;
   
