@@ -1,12 +1,9 @@
 {
-  "client_id": "http://127.0.0.1:5000/client-metadata.json",
+  "client_id": "https://bridge.linkedtrust.us/client-metadata.json",
   "client_name": "Ghost ATProto Bridge",
-  "client_uri": "http://127.0.0.1:5000",
-  "logo_uri": "http://127.0.0.1:5000/logo.png",
-  "tos_uri": "http://127.0.0.1:5000/terms",
-  "policy_uri": "http://127.0.0.1:5000/privacy",
+  "client_uri": "https://bridge.linkedtrust.us",
   "redirect_uris": [
-    "http://127.0.0.1:5000/api/auth/bluesky/callback"
+    "https://bridge.linkedtrust.us/api/auth/bluesky/callback"
   ],
   "scope": "atproto transition:generic",
   "grant_types": [
