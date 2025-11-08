@@ -1504,7 +1504,13 @@ app.get('/api/civic-events', async (req, res) => {
     if (timeslot_start_before) params.append('timeslot_start_before', timeslot_start_before as string);
     if (timeslot_start) params.append('timeslot_start', timeslot_start as string);
     if (timeslot_end) params.append('timeslot_end', timeslot_end as string);
-    
+
+    // Default: only show upcoming events if no date filters provided
+    if (!timeslot_start_after && !timeslot_start_before && !timeslot_start && !timeslot_end) {
+      const now = new Date().toISOString();
+      params.append('timeslot_start', `gte_${now}`);
+    }
+
     // Tag filters (support multiple)
     if (tag_id) {
       const tags = Array.isArray(tag_id) ? tag_id : [tag_id];
