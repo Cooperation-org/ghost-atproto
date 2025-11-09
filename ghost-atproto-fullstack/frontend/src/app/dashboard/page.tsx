@@ -13,7 +13,6 @@ import {
   CircularProgress,
   Button,
   Chip,
-  Avatar,
   IconButton,
   Menu,
   MenuItem,
@@ -26,7 +25,8 @@ import AddIcon from '@mui/icons-material/Add';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { api } from '@/lib/api';
+import { api, CivicActionDto } from '@/lib/api';
+import { Post } from '@/lib/types';
 
 interface ImpactData {
   metrics: {
@@ -41,7 +41,7 @@ interface ImpactData {
     notes?: string | null;
     createdAt: string;
     updatedAt: string;
-    civicAction: any;
+    civicAction: CivicActionDto;
   }>;
   completedActions: Array<{
     id: string;
@@ -49,10 +49,10 @@ interface ImpactData {
     notes?: string | null;
     createdAt: string;
     updatedAt: string;
-    civicAction: any;
+    civicAction: CivicActionDto;
   }>;
-  createdActions: Array<any>;
-  createdArticles: Array<any>;
+  createdActions: CivicActionDto[];
+  createdArticles: Post[];
 }
 
 export default function YourImpactPage() {
@@ -349,7 +349,7 @@ export default function YourImpactPage() {
       <Box sx={{ mb: 5 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            What You've Created
+            What You&apos;ve Created
           </Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
@@ -384,7 +384,7 @@ export default function YourImpactPage() {
           >
             <VolunteerActivismIcon sx={{ fontSize: 48, color: 'grey.400', mb: 2 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              You haven't created anything yet
+              You haven&apos;t created anything yet
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Create a civic action or publish an article to get started

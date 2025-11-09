@@ -156,9 +156,9 @@ export async function syncMobilizeEvents(
       console.log(`  📄 Fetching page ${pageCount}...`);
 
       try {
-        const response = await axios.get<MobilizeResponse>(nextUrl);
-        const mobilizeData = response.data;
-        const { data, next, count } = mobilizeData;
+        const response: { data: MobilizeResponse } = await axios.get<MobilizeResponse>(nextUrl);
+        const mobilizeData: MobilizeResponse = response.data;
+        const { data, next, count }: { data: MobilizeEvent[]; next: string | null; count: number } = mobilizeData;
 
         console.log(`  📊 Page ${pageCount}: ${data.length} events (total: ${count})`);
 

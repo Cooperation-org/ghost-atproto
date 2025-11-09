@@ -10,6 +10,10 @@ export interface CivicActionDto {
   eventType?: string | null;
   eventDate?: string | null;
   imageUrl?: string | null;
+  externalUrl?: string | null;
+  source?: string;
+  isPinned?: boolean;
+  engagementCount?: number;
 }
 
 // Use 127.0.0.1 instead of localhost for AT Protocol OAuth (RFC 8252 requirement)
@@ -370,7 +374,7 @@ class ApiClient {
       notes?: string | null;
       createdAt: string;
       updatedAt: string;
-      civicAction: any;
+      civicAction: CivicActionDto;
     }>;
     completedActions: Array<{
       id: string;
@@ -378,22 +382,34 @@ class ApiClient {
       notes?: string | null;
       createdAt: string;
       updatedAt: string;
-      civicAction: any;
+      civicAction: CivicActionDto;
     }>;
-    createdActions: Array<any>;
+    createdActions: CivicActionDto[];
     createdArticles: Post[];
   }> {
     return this.request('/api/user/impact');
   }
 
-  async createEngagement(civicActionId: string, status?: string, notes?: string): Promise<any> {
+  async createEngagement(civicActionId: string, status?: string, notes?: string): Promise<{
+    id: string;
+    userId: string;
+    civicActionId: string;
+    status: string;
+    notes?: string | null;
+  }> {
     return this.request('/api/user/engagements', {
       method: 'POST',
       body: JSON.stringify({ civicActionId, status, notes }),
     });
   }
 
-  async updateEngagement(id: string, status?: string, notes?: string): Promise<any> {
+  async updateEngagement(id: string, status?: string, notes?: string): Promise<{
+    id: string;
+    userId: string;
+    civicActionId: string;
+    status: string;
+    notes?: string | null;
+  }> {
     return this.request(`/api/user/engagements/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ status, notes }),
