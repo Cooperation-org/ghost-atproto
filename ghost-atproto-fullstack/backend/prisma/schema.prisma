@@ -8,23 +8,24 @@ datasource db {
 }
 
 model User {
-  id                    String         @id @default(cuid())
-  email                 String         @unique
+  id                    String           @id @default(cuid())
+  email                 String           @unique
   name                  String?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  blueskyHandle         String?        @map("bluesky_handle")
-  blueskyPassword       String?        @map("bluesky_password")
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  blueskyHandle         String?          @map("bluesky_handle")
+  blueskyPassword       String?          @map("bluesky_password")
   blueskyDid            String?
-  ghostApiKey           String?        @map("ghost_api_key")
-  ghostUrl              String?        @map("ghost_url")
-  ghostWebhookId        String?        @map("ghost_webhook_id")
-  ghostContentApiKey    String?        @map("ghost_content_api_key")
+  ghostApiKey           String?          @map("ghost_api_key")
+  ghostUrl              String?          @map("ghost_url")
+  ghostWebhookId        String?          @map("ghost_webhook_id")
+  ghostContentApiKey    String?          @map("ghost_content_api_key")
   password              String
-  role                  Role           @default(USER)
-  autoSync              Boolean        @default(true) @map("auto_sync")
-  reviewedCivicActions  CivicAction[]  @relation("ReviewedActions")
-  submittedCivicActions CivicAction[]  @relation("SubmittedActions")
+  role                  Role             @default(USER)
+  autoSync              Boolean          @default(true) @map("auto_sync")
+  reviewedCivicActions  CivicAction[]    @relation("ReviewedActions")
+  submittedCivicActions CivicAction[]    @relation("SubmittedActions")
+  engagements           UserEngagement[]
   oauthSessions         OAuthSession[]
   posts                 Post[]
   syncLogs              SyncLog[]
@@ -104,27 +105,55 @@ model Settings {
 }
 
 model CivicAction {
-  id              String    @id @default(cuid())
+  id              String            @id @default(cuid())
   title           String
-  description     String    @db.Text
-  eventType       String?   @map("event_type")
+  description     String            @db.Text
+  eventType       String?           @map("event_type")
   location        String?
-  eventDate       DateTime? @map("event_date")
-  status          String    @default("pending")
-  isPinned        Boolean   @default(false) @map("is_pinned")
-  reviewedBy      String?   @map("reviewed_by")
-  reviewedAt      DateTime? @map("reviewed_at")
-  rejectionReason String?   @map("rejection_reason") @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  eventDate       DateTime?         @map("event_date")
+  status          String            @default("pending")
+  isPinned        Boolean           @default(false) @map("is_pinned")
+  reviewedBy      String?           @map("reviewed_by")
+  reviewedAt      DateTime?         @map("reviewed_at")
+  rejectionReason String?           @map("rejection_reason") @db.Text
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   userId          String
-  imageUrl        String?   @map("image_url") @db.LongText
-  reviewer        User?     @relation("ReviewedActions", fields: [reviewedBy], references: [id])
-  user            User      @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
+  imageUrl        String?           @map("image_url") @db.LongText
+  source          String            @default("user_submitted")
+  externalId      String?           @map("external_id")
+  externalUrl     String?           @map("external_url")
+  sourceMeta      Json?             @map("source_meta")
+  state           String?
+  zipcode         String?
+  engagements     UserEngagement[]
+  reviewer        User?             @relation("ReviewedActions", fields: [reviewedBy], references: [id])
+  user            User              @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([source, externalId])
   @@index([reviewedBy], map: "civic_actions_reviewed_by_fkey")
   @@index([userId], map: "civic_actions_userId_fkey")
+  @@index([state])
+  @@index([zipcode])
+  @@index([externalId])
   @@map("civic_actions")
+}
+
+model UserEngagement {
+  id            String       @id @default(cuid())
+  userId        String       @map("user_id")
+  civicActionId String       @map("civic_action_id")
+  status        String       @default("interested")
+  notes         String?      @db.Text
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  civicAction   CivicAction  @relation(fields: [civicActionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, civicActionId])
+  @@index([userId], map: "user_engagements_user_id_fkey")
+  @@index([civicActionId], map: "user_engagements_civic_action_id_fkey")
+  @@map("user_engagements")
 }
 
 enum Role {

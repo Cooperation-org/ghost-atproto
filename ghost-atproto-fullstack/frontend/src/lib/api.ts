@@ -356,6 +356,56 @@ class ApiClient {
     return this.request<CivicActionDto>(`/api/civic-actions/${id}`);
   }
 
+  // User Engagement
+  async getUserImpact(): Promise<{
+    metrics: {
+      completedActionsCount: number;
+      activeCommitmentsCount: number;
+      createdActionsCount: number;
+      createdArticlesCount: number;
+    };
+    activeCommitments: Array<{
+      id: string;
+      status: string;
+      notes?: string | null;
+      createdAt: string;
+      updatedAt: string;
+      civicAction: any;
+    }>;
+    completedActions: Array<{
+      id: string;
+      status: string;
+      notes?: string | null;
+      createdAt: string;
+      updatedAt: string;
+      civicAction: any;
+    }>;
+    createdActions: Array<any>;
+    createdArticles: Post[];
+  }> {
+    return this.request('/api/user/impact');
+  }
+
+  async createEngagement(civicActionId: string, status?: string, notes?: string): Promise<any> {
+    return this.request('/api/user/engagements', {
+      method: 'POST',
+      body: JSON.stringify({ civicActionId, status, notes }),
+    });
+  }
+
+  async updateEngagement(id: string, status?: string, notes?: string): Promise<any> {
+    return this.request(`/api/user/engagements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes }),
+    });
+  }
+
+  async deleteEngagement(id: string): Promise<{ message: string }> {
+    return this.request(`/api/user/engagements/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Civic Events (Mobilize API)
   async getCivicEvents(params?: { 
     cursor?: string; 
