@@ -12,30 +12,66 @@ import {
   CardContent,
   CircularProgress,
   Button,
-  Avatar,
   Chip,
+  IconButton,
+  Menu,
+  MenuItem,
 } from '@mui/material';
-import ArticleIcon from '@mui/icons-material/Article';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EventIcon from '@mui/icons-material/Event';
+import ArticleIcon from '@mui/icons-material/Article';
+import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
+import AddIcon from '@mui/icons-material/Add';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { api } from '@/lib/api';
+import { api, CivicActionDto } from '@/lib/api';
 import { Post } from '@/lib/types';
 
-export default function DashboardPage() {
+interface ImpactData {
+  metrics: {
+    completedActionsCount: number;
+    activeCommitmentsCount: number;
+    createdActionsCount: number;
+    createdArticlesCount: number;
+  };
+  activeCommitments: Array<{
+    id: string;
+    status: string;
+    notes?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    civicAction: CivicActionDto;
+  }>;
+  completedActions: Array<{
+    id: string;
+    status: string;
+    notes?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    civicAction: CivicActionDto;
+  }>;
+  createdActions: CivicActionDto[];
+  createdArticles: Post[];
+}
+
+export default function YourImpactPage() {
   const router = useRouter();
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [impactData, setImpactData] = useState<ImpactData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedEngagementId, setSelectedEngagementId] = useState<string | null>(null);
 
   useEffect(() => {
     // Extract token from URL if present (from OAuth redirect)
     api.extractTokenFromUrl();
-    
+
     const loadData = async () => {
       try {
-        const postsData = await api.getAllPosts(); // Get ALL posts from ALL users
-        setPosts(postsData);
+        const data = await api.getUserImpact();
+        setImpactData(data);
       } catch (error) {
-        console.error('Failed to load dashboard data:', error);
+        console.error('Failed to load impact data:', error);
         // If unauthorized, redirect to login
         if (error instanceof Error && error.message.includes('401')) {
           router.push('/login');
@@ -48,6 +84,46 @@ export default function DashboardPage() {
     loadData();
   }, [router]);
 
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, engagementId: string) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedEngagementId(engagementId);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedEngagementId(null);
+  };
+
+  const handleUpdateStatus = async (newStatus: string) => {
+    if (!selectedEngagementId) return;
+
+    try {
+      await api.updateEngagement(selectedEngagementId, newStatus);
+      // Reload data
+      const data = await api.getUserImpact();
+      setImpactData(data);
+    } catch (error) {
+      console.error('Failed to update engagement:', error);
+    }
+
+    handleMenuClose();
+  };
+
+  const handleRemoveEngagement = async () => {
+    if (!selectedEngagementId) return;
+
+    try {
+      await api.deleteEngagement(selectedEngagementId);
+      // Reload data
+      const data = await api.getUserImpact();
+      setImpactData(data);
+    } catch (error) {
+      console.error('Failed to remove engagement:', error);
+    }
+
+    handleMenuClose();
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -58,230 +134,372 @@ export default function DashboardPage() {
     );
   }
 
+  if (!impactData) {
+    return (
+      <DashboardLayout>
+        <Typography variant="h6" color="error">
+          Failed to load impact data
+        </Typography>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
+      {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Articles
+        <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
+          Your Impact
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Track your civic engagement and contributions
         </Typography>
       </Box>
 
-      {/* Articles Grid */}
-      {posts.length === 0 ? (
-        <Paper 
-          sx={{ 
-            p: 8, 
-            textAlign: 'center', 
-            borderRadius: 3,
-            border: '2px dashed',
-            borderColor: 'grey.300',
-            bgcolor: 'grey.50'
-          }}
-        >
-          <Box
+      {/* Summary Metrics */}
+      <Grid container spacing={3} sx={{ mb: 5 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'grey.200' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <CheckCircleIcon sx={{ fontSize: 40, color: 'success.main' }} />
+                <Typography variant="h3" sx={{ fontWeight: 700, color: 'success.main' }}>
+                  {impactData.metrics.completedActionsCount}
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Completed Actions
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'grey.200' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <EventIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+                <Typography variant="h3" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                  {impactData.metrics.activeCommitmentsCount}
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Active Commitments
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'grey.200' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <VolunteerActivismIcon sx={{ fontSize: 40, color: 'secondary.main' }} />
+                <Typography variant="h3" sx={{ fontWeight: 700, color: 'secondary.main' }}>
+                  {impactData.metrics.createdActionsCount}
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Created Actions
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'grey.200' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                <ArticleIcon sx={{ fontSize: 40, color: 'info.main' }} />
+                <Typography variant="h3" sx={{ fontWeight: 700, color: 'info.main' }}>
+                  {impactData.metrics.createdArticlesCount}
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Articles Published
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Active Commitments */}
+      <Box sx={{ mb: 5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            Active Commitments
+          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => router.push('/bridge/dashboard/civic-actions')}
+            sx={{ borderRadius: 2 }}
+          >
+            Find Events
+          </Button>
+        </Box>
+
+        {impactData.activeCommitments.length === 0 ? (
+          <Paper
             sx={{
-              width: 80,
-              height: 80,
-              borderRadius: '50%',
-              bgcolor: 'primary.light',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mx: 'auto',
-              mb: 3
+              p: 6,
+              textAlign: 'center',
+              borderRadius: 3,
+              border: '2px dashed',
+              borderColor: 'grey.300',
+              bgcolor: 'grey.50'
             }}
           >
-            <ArticleIcon sx={{ fontSize: 40, color: 'primary.main' }} />
-          </Box>
-          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
-            No Articles Yet
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
-            Connect your Ghost site to start syncing articles to Bluesky automatically
-          </Typography>
-        </Paper>
-      ) : (
-        <Grid container spacing={4}>
-          {posts.map((post: Post & { user?: { id: string; email: string; name?: string | null } }, index: number) => {
-            // Generate a gradient based on index
-            const gradients = [
-              'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-              'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-              'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-              'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-              'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
-            ];
-            const gradient = gradients[index % gradients.length];
+            <EventIcon sx={{ fontSize: 48, color: 'grey.400', mb: 2 }} />
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No active commitments yet
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Find civic events and mark yourself as interested or going
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => router.push('/bridge/dashboard/civic-actions')}
+              sx={{ borderRadius: 2 }}
+            >
+              Browse Events
+            </Button>
+          </Paper>
+        ) : (
+          <Grid container spacing={3}>
+            {impactData.activeCommitments.map((commitment) => {
+              const action = commitment.civicAction;
+              const isExternal = action.source !== 'user_submitted';
 
-            return (
-              <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={post.id}>
-                <Card 
-                  sx={{ 
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    borderRadius: 3,
-                    overflow: 'hidden',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    border: '1px solid',
-                    borderColor: 'grey.200',
-                    '&:hover': {
-                      transform: 'translateY(-8px)',
-                      boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
-                      borderColor: 'primary.main',
-                    }
-                  }}
-                >
-                  {/* Featured Image (fallback to gradient when missing) */}
-                  <Box
-                    sx={{
-                      height: 200,
-                      background: post.featureImage
-                        ? `url(${post.featureImage})`
-                        : gradient,
-                      backgroundSize: post.featureImage ? 'cover' : undefined,
-                      backgroundPosition: post.featureImage ? 'center' : undefined,
-                      position: 'relative',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    {/* Status Badge Overlay */}
-                    <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
-                      {post.atprotoUri ? (
-                        <Chip 
-                          icon={<CheckCircleIcon />}
-                          label="Synced" 
-                          size="small"
-                          sx={{ 
-                            bgcolor: 'rgba(255, 255, 255, 0.95)',
-                            color: 'success.main',
-                            fontWeight: 600,
-                            backdropFilter: 'blur(10px)'
-                          }}
-                        />
-                      ) : (
-                        <Chip 
-                          label="Pending" 
-                          size="small" 
-                          sx={{ 
-                            bgcolor: 'rgba(255, 255, 255, 0.95)',
-                            color: 'warning.main',
-                            fontWeight: 600,
-                            backdropFilter: 'blur(10px)'
-                          }}
-                        />
-                      )}
-                    </Box>
-                    
-                    {/* Placeholder icon only when no image */}
-                    {!post.featureImage && (
-                      <ArticleIcon sx={{ fontSize: 64, color: 'rgba(255,255,255,0.3)' }} />
-                    )}
-                  </Box>
-
-                  <CardContent sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column' }}>
-                    {/* Title */}
-                    <Typography 
-                      variant="h6" 
-                      sx={{ 
-                        fontWeight: 700,
-                        lineHeight: 1.4,
-                        mb: 2,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                        color: 'text.primary',
-                        minHeight: '3.5rem'
-                      }}
-                    >
-                      {post.title}
-                    </Typography>
-
-                    {/* Excerpt */}
-                    {post.content && (
-                      <Typography 
-                        variant="body2" 
-                        color="text.secondary" 
-                        sx={{ 
-                          mb: 3,
-                          display: '-webkit-box',
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                          lineHeight: 1.7,
-                          flexGrow: 1
-                        }}
-                      >
-                        {post.content.replace(/<[^>]*>/g, '').substring(0, 150)}...
-                      </Typography>
-                    )}
-
-                    {/* Footer Section */}
-                    <Box sx={{ mt: 'auto' }}>
-                      {/* Author & Date */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                        {post.user && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Avatar 
-                              sx={{ 
-                                width: 32, 
-                                height: 32, 
-                                fontSize: '0.875rem',
-                                bgcolor: 'primary.main',
-                                fontWeight: 600
-                              }}
-                            >
-                              {(post.user.name?.[0] || post.user.email[0]).toUpperCase()}
-                            </Avatar>
-                            <Box>
-                              <Typography variant="caption" display="block" fontWeight={600}>
-                                {post.user.name || post.user.email.split('@')[0]}
-                              </Typography>
-                              {post.publishedAt && (
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                  {formatDateForDisplay(post.publishedAt, { 
-                                    month: 'short', 
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                  })}
-                                </Typography>
-                              )}
-                            </Box>
+              return (
+                <Grid size={{ xs: 12, md: 6 }} key={commitment.id}>
+                  <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'grey.200' }}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                            <Chip
+                              label={commitment.status === 'interested' ? 'Interested' : 'Going'}
+                              size="small"
+                              color={commitment.status === 'going' ? 'primary' : 'default'}
+                              sx={{ fontWeight: 600 }}
+                            />
+                            {isExternal && (
+                              <Chip
+                                label={action.source}
+                                size="small"
+                                variant="outlined"
+                                sx={{ textTransform: 'capitalize' }}
+                              />
+                            )}
                           </Box>
-                        )}
+                          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                            {action.title}
+                          </Typography>
+                          {action.eventDate && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              {formatDateForDisplay(action.eventDate, {
+                                month: 'long',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit'
+                              })}
+                            </Typography>
+                          )}
+                          {action.location && (
+                            <Typography variant="body2" color="text.secondary">
+                              {action.location}
+                            </Typography>
+                          )}
+                        </Box>
+                        <IconButton
+                          onClick={(e) => handleMenuOpen(e, commitment.id)}
+                          size="small"
+                        >
+                          <MoreVertIcon />
+                        </IconButton>
                       </Box>
-
-                      {/* View Link */}
                       <Button
-                        onClick={() => window.location.href = `/bridge/article/${post.id}`}
                         fullWidth
                         variant="outlined"
-                        sx={{ 
-                          textTransform: 'none',
-                          borderRadius: 2,
-                          py: 1,
-                          fontWeight: 600,
-                          '&:hover': {
-                            bgcolor: 'primary.main',
-                            color: 'white',
-                            borderColor: 'primary.main'
+                        endIcon={isExternal ? <OpenInNewIcon /> : undefined}
+                        onClick={() => {
+                          if (isExternal && action.externalUrl) {
+                            window.open(action.externalUrl, '_blank');
+                          } else {
+                            router.push(`/bridge/dashboard/civic-actions`);
                           }
                         }}
+                        sx={{ borderRadius: 2, mt: 2 }}
                       >
-                        Read Full Article →
+                        {isExternal ? 'View on Mobilize' : 'View Details'}
                       </Button>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
+          </Grid>
+        )}
+      </Box>
+
+      {/* What You've Created */}
+      <Box sx={{ mb: 5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            What You&apos;ve Created
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => router.push('/bridge/dashboard/civic-actions')}
+              sx={{ borderRadius: 2 }}
+            >
+              New Action
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => router.push('/bridge/dashboard/articles')}
+              sx={{ borderRadius: 2 }}
+            >
+              New Article
+            </Button>
+          </Box>
+        </Box>
+
+        {impactData.createdActions.length === 0 && impactData.createdArticles.length === 0 ? (
+          <Paper
+            sx={{
+              p: 6,
+              textAlign: 'center',
+              borderRadius: 3,
+              border: '2px dashed',
+              borderColor: 'grey.300',
+              bgcolor: 'grey.50'
+            }}
+          >
+            <VolunteerActivismIcon sx={{ fontSize: 48, color: 'grey.400', mb: 2 }} />
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              You haven&apos;t created anything yet
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Create a civic action or publish an article to get started
+            </Typography>
+          </Paper>
+        ) : (
+          <Grid container spacing={3}>
+            {/* Created Actions */}
+            {impactData.createdActions.map((action) => (
+              <Grid size={{ xs: 12, md: 6 }} key={action.id}>
+                <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'grey.200' }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                      <Chip
+                        label={action.status}
+                        size="small"
+                        color={
+                          action.status === 'approved' ? 'success' :
+                          action.status === 'pending' ? 'warning' : 'error'
+                        }
+                        sx={{ textTransform: 'capitalize', fontWeight: 600 }}
+                      />
+                      {action.isPinned && (
+                        <Chip label="Pinned" size="small" color="primary" />
+                      )}
                     </Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                      {action.title}
+                    </Typography>
+                    {action.eventDate && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        {formatDateForDisplay(action.eventDate, {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </Typography>
+                    )}
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      {action.engagementCount} {action.engagementCount === 1 ? 'person' : 'people'} engaged
+                    </Typography>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      onClick={() => router.push('/bridge/dashboard/civic-actions')}
+                      sx={{ borderRadius: 2 }}
+                    >
+                      View Details
+                    </Button>
                   </CardContent>
                 </Card>
               </Grid>
-            );
-          })}
-        </Grid>
-      )}
+            ))}
+
+            {/* Created Articles */}
+            {impactData.createdArticles.slice(0, 4).map((article) => (
+              <Grid size={{ xs: 12, md: 6 }} key={article.id}>
+                <Card sx={{ borderRadius: 3, border: '1px solid', borderColor: 'grey.200' }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                      <Chip
+                        icon={article.atprotoUri ? <CheckCircleIcon /> : undefined}
+                        label={article.atprotoUri ? 'Synced' : 'Pending'}
+                        size="small"
+                        color={article.atprotoUri ? 'success' : 'warning'}
+                        sx={{ fontWeight: 600 }}
+                      />
+                    </Box>
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                      {article.title}
+                    </Typography>
+                    {article.publishedAt && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {formatDateForDisplay(article.publishedAt, {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </Typography>
+                    )}
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      onClick={() => window.location.href = `/bridge/article/${article.id}`}
+                      sx={{ borderRadius: 2 }}
+                    >
+                      Read Article
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </Box>
+
+      {/* Engagement Status Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+      >
+        <MenuItem onClick={() => handleUpdateStatus('interested')}>
+          Mark as Interested
+        </MenuItem>
+        <MenuItem onClick={() => handleUpdateStatus('going')}>
+          Mark as Going
+        </MenuItem>
+        <MenuItem onClick={() => handleUpdateStatus('completed')}>
+          Mark as Completed
+        </MenuItem>
+        <MenuItem onClick={handleRemoveEngagement} sx={{ color: 'error.main' }}>
+          Remove
+        </MenuItem>
+      </Menu>
     </DashboardLayout>
   );
 }

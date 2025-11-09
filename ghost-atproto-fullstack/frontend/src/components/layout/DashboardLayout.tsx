@@ -26,6 +26,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import ArticleIcon from '@mui/icons-material/Article';
 import CloudIcon from '@mui/icons-material/Cloud';
 import CampaignIcon from '@mui/icons-material/Campaign';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import { api } from '@/lib/api';
 import { User } from '@/lib/types';
 
@@ -50,6 +51,8 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
       let matched: string | false = false;
       if (path === '/dashboard') {
         matched = '/dashboard';
+      } else if (path === '/dashboard/articles' || path.startsWith('/dashboard/articles/')) {
+        matched = '/dashboard/articles';
       } else if (path === '/dashboard/civic-actions' || path.startsWith('/dashboard/civic-actions/')) {
         matched = '/dashboard/civic-actions';
       } else {
@@ -253,8 +256,8 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
       }}>
         <Box sx={{ maxWidth: '1400px', mx: 'auto', px: 3 }}>
-          <Tabs 
-            value={currentTab} 
+          <Tabs
+            value={currentTab}
             onChange={handleTabChange}
             sx={{
               '& .MuiTab-root': {
@@ -265,17 +268,23 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
               }
             }}
           >
-            <Tab 
-              icon={<ArticleIcon />} 
-              iconPosition="start" 
-              label="Articles" 
-              value="/dashboard" 
+            <Tab
+              icon={<BarChartIcon />}
+              iconPosition="start"
+              label="Your Impact"
+              value="/dashboard"
             />
-            <Tab 
-              icon={<CampaignIcon />} 
-              iconPosition="start" 
-              label="Civic Actions" 
-              value="/dashboard/civic-actions" 
+            <Tab
+              icon={<ArticleIcon />}
+              iconPosition="start"
+              label="Articles"
+              value="/dashboard/articles"
+            />
+            <Tab
+              icon={<CampaignIcon />}
+              iconPosition="start"
+              label="Civic Actions"
+              value="/dashboard/civic-actions"
             />
           </Tabs>
         </Box>

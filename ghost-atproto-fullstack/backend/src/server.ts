@@ -19,6 +19,8 @@ import axios from 'axios';
 import { setupGoogleOAuth } from './lib/google-oauth';
 import { setupBlueskyOAuth } from './lib/bluesky-oauth';
 import { validateOAuthConfig } from './lib/oauth-config';
+import { syncMobilizeEvents } from './jobs/sync-mobilize';
+import { startScheduler } from './jobs/scheduler';
 
 // Load environment variables
 dotenv.config();
@@ -41,13 +43,7 @@ app.set('trust proxy', true);
 app.use(morgan('dev'));
 
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://127.0.0.1:3000',
-    'http://localhost:3000',
-    'http://localhost:3001', // Allow port 3001 as well
-    'http://127.0.0.1:3000', // RFC 8252 requirement for OAuth
-    'http://127.0.0.1:3001'
-  ],
+  origin: true, // Allow all origins
   credentials: true
 }));
 
@@ -1980,19 +1976,288 @@ app.post('/api/civic-actions/:id/toggle-pin', authenticateToken, async (req, res
   }
 });
 
+// User Engagement Routes
+
+// Get user's impact dashboard data
+app.get('/api/user/impact', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+
+    // Get user's engagements with civic actions
+    const engagements = await prisma.userEngagement.findMany({
+      where: { userId },
+      include: {
+        civicAction: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Separate active commitments (interested/going) from completed
+    const activeCommitments = engagements.filter(e =>
+      e.status === 'interested' || e.status === 'going'
+    );
+    const completedActions = engagements.filter(e =>
+      e.status === 'completed'
+    );
+
+    // Get user's created civic actions
+    const createdActions = await prisma.civicAction.findMany({
+      where: {
+        userId,
+        source: 'user_submitted' // Only user-submitted, not Mobilize sync
+      },
+      include: {
+        engagements: true,
+        reviewer: {
+          select: {
+            id: true,
+            name: true,
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Get user's created articles
+    const createdArticles = await prisma.post.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    });
+
+    // Calculate metrics
+    const metrics = {
+      completedActionsCount: completedActions.length,
+      activeCommitmentsCount: activeCommitments.length,
+      createdActionsCount: createdActions.length,
+      createdArticlesCount: createdArticles.length,
+    };
+
+    res.json({
+      metrics,
+      activeCommitments: activeCommitments.map(e => ({
+        id: e.id,
+        status: e.status,
+        notes: e.notes,
+        createdAt: e.createdAt,
+        updatedAt: e.updatedAt,
+        civicAction: e.civicAction
+      })),
+      completedActions: completedActions.map(e => ({
+        id: e.id,
+        status: e.status,
+        notes: e.notes,
+        createdAt: e.createdAt,
+        updatedAt: e.updatedAt,
+        civicAction: e.civicAction
+      })),
+      createdActions: createdActions.map(action => ({
+        ...action,
+        engagementCount: action.engagements.length
+      })),
+      createdArticles
+    });
+  } catch (error) {
+    console.error('Get user impact error:', error);
+    res.status(500).json({ error: 'Failed to fetch user impact data' });
+  }
+});
+
+// Create a new engagement
+app.post('/api/user/engagements', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { civicActionId, status, notes } = req.body;
+
+    if (!civicActionId) {
+      return res.status(400).json({ error: 'civicActionId is required' });
+    }
+
+    // Validate status
+    const validStatuses = ['interested', 'going', 'completed'];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be one of: interested, going, completed' });
+    }
+
+    // Check if engagement already exists
+    const existing = await prisma.userEngagement.findUnique({
+      where: {
+        userId_civicActionId: {
+          userId,
+          civicActionId
+        }
+      }
+    });
+
+    if (existing) {
+      return res.status(400).json({ error: 'Engagement already exists. Use PATCH to update.' });
+    }
+
+    // Create engagement
+    const engagement = await prisma.userEngagement.create({
+      data: {
+        userId,
+        civicActionId,
+        status: status || 'interested',
+        notes: notes || null
+      },
+      include: {
+        civicAction: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.json(engagement);
+  } catch (error) {
+    console.error('Create engagement error:', error);
+    res.status(500).json({ error: 'Failed to create engagement' });
+  }
+});
+
+// Update an engagement
+app.patch('/api/user/engagements/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    // Check if engagement exists and belongs to user
+    const existing = await prisma.userEngagement.findUnique({
+      where: { id }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Engagement not found' });
+    }
+
+    if (existing.userId !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Validate status if provided
+    if (status) {
+      const validStatuses = ['interested', 'going', 'completed'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status. Must be one of: interested, going, completed' });
+      }
+    }
+
+    // Update engagement
+    const engagement = await prisma.userEngagement.update({
+      where: { id },
+      data: {
+        status: status ?? undefined,
+        notes: notes !== undefined ? notes : undefined
+      },
+      include: {
+        civicAction: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    res.json(engagement);
+  } catch (error) {
+    console.error('Update engagement error:', error);
+    res.status(500).json({ error: 'Failed to update engagement' });
+  }
+});
+
+// Delete an engagement
+app.delete('/api/user/engagements/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+
+    // Check if engagement exists and belongs to user
+    const existing = await prisma.userEngagement.findUnique({
+      where: { id }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Engagement not found' });
+    }
+
+    if (existing.userId !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Delete engagement
+    await prisma.userEngagement.delete({
+      where: { id }
+    });
+
+    res.json({ message: 'Engagement deleted successfully' });
+  } catch (error) {
+    console.error('Delete engagement error:', error);
+    res.status(500).json({ error: 'Failed to delete engagement' });
+  }
+});
+
+// Manual Mobilize sync trigger (admin only)
+app.post('/api/admin/sync-mobilize', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { organizationIds, updatedSince } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    console.log('🔄 Manual Mobilize sync triggered by admin:', user.email);
+
+    const result = await syncMobilizeEvents(
+      organizationIds || [93],
+      updatedSince
+    );
+
+    res.json({
+      message: 'Mobilize sync completed',
+      result
+    });
+  } catch (error) {
+    console.error('Manual Mobilize sync error:', error);
+    res.status(500).json({
+      error: 'Sync failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Mount all routes on /bridge as well (for nginx proxy)
 const bridgeApp = express.Router();
 bridgeApp.use(app._router);
 
 // Create a new app that handles both root and /bridge prefix
 const finalApp = express();
-finalApp.use(cors({ 
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3000'
-  ], 
-  credentials: true 
+finalApp.use(cors({
+  origin: true, // Allow all origins
+  credentials: true
 }));
 
 // Add redirect for /wizard/ to /bridge/wizard (only for production server)
@@ -2017,4 +2282,7 @@ finalApp.listen(port, () => {
   console.log(`   - http://localhost:${port}/api/health`);
   console.log(`   - http://localhost:${port}/bridge/api/health`);
   console.log(`🔐 Configure Ghost webhook with X-User-ID header`);
+
+  // Start scheduled jobs
+  startScheduler();
 });

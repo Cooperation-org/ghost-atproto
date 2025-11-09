@@ -10,6 +10,10 @@ export interface CivicActionDto {
   eventType?: string | null;
   eventDate?: string | null;
   imageUrl?: string | null;
+  externalUrl?: string | null;
+  source?: string;
+  isPinned?: boolean;
+  engagementCount?: number;
 }
 
 // Use 127.0.0.1 instead of localhost for AT Protocol OAuth (RFC 8252 requirement)
@@ -354,6 +358,68 @@ class ApiClient {
 
   async getCivicActionById(id: string): Promise<CivicActionDto> {
     return this.request<CivicActionDto>(`/api/civic-actions/${id}`);
+  }
+
+  // User Engagement
+  async getUserImpact(): Promise<{
+    metrics: {
+      completedActionsCount: number;
+      activeCommitmentsCount: number;
+      createdActionsCount: number;
+      createdArticlesCount: number;
+    };
+    activeCommitments: Array<{
+      id: string;
+      status: string;
+      notes?: string | null;
+      createdAt: string;
+      updatedAt: string;
+      civicAction: CivicActionDto;
+    }>;
+    completedActions: Array<{
+      id: string;
+      status: string;
+      notes?: string | null;
+      createdAt: string;
+      updatedAt: string;
+      civicAction: CivicActionDto;
+    }>;
+    createdActions: CivicActionDto[];
+    createdArticles: Post[];
+  }> {
+    return this.request('/api/user/impact');
+  }
+
+  async createEngagement(civicActionId: string, status?: string, notes?: string): Promise<{
+    id: string;
+    userId: string;
+    civicActionId: string;
+    status: string;
+    notes?: string | null;
+  }> {
+    return this.request('/api/user/engagements', {
+      method: 'POST',
+      body: JSON.stringify({ civicActionId, status, notes }),
+    });
+  }
+
+  async updateEngagement(id: string, status?: string, notes?: string): Promise<{
+    id: string;
+    userId: string;
+    civicActionId: string;
+    status: string;
+    notes?: string | null;
+  }> {
+    return this.request(`/api/user/engagements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes }),
+    });
+  }
+
+  async deleteEngagement(id: string): Promise<{ message: string }> {
+    return this.request(`/api/user/engagements/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   // Civic Events (Mobilize API)

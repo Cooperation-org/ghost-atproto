@@ -1,4 +1,17 @@
 {
+  "/_not-found/page": "app/_not-found/page.js",
+  "/article/[id]/page": "app/article/[id]/page.js",
+  "/dashboard/articles/page": "app/dashboard/articles/page.js",
+  "/dashboard/civic-actions/[id]/page": "app/dashboard/civic-actions/[id]/page.js",
+  "/dashboard/civic-actions/page": "app/dashboard/civic-actions/page.js",
+  "/dashboard/logs/page": "app/dashboard/logs/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/posts/page": "app/dashboard/posts/page.js",
+  "/dashboard/profile/page": "app/dashboard/profile/page.js",
+  "/dashboard/settings/page": "app/dashboard/settings/page.js",
   "/favicon.ico/route": "app/favicon.ico/route.js",
-  "/login/page": "app/login/page.js"
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/signup/page": "app/signup/page.js",
+  "/wizard/page": "app/wizard/page.js"
 }
