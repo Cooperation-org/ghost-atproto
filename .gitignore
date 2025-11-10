@@ -9,7 +9,7 @@ yarn.lock*
 package-lock.json*
 .yarn/
 # Next.js build outputs
-.next/
+**/.next/
 out/
 
 # Build outputs
