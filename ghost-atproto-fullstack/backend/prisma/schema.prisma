@@ -136,6 +136,7 @@ model CivicAction {
   @@index([state])
   @@index([zipcode])
   @@index([externalId])
+  @@fulltext([title, description])
   @@map("civic_actions")
 }
 

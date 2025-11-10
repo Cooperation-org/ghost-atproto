@@ -1552,7 +1552,7 @@ app.get('/api/sync-logs', async (req, res) => {
 // PUBLIC: Get approved civic actions (no authentication required)
 app.get('/api/public/civic-actions', async (req, res) => {
   try {
-    const { q, location, includeExpired } = req.query;
+    const { q, location, state, includeExpired } = req.query;
 
     // Build where clause
     const whereClause: any = { status: 'approved' };
@@ -1565,13 +1565,13 @@ app.get('/api/public/civic-actions', async (req, res) => {
       ];
     }
 
-    // Keyword search in title and description
+    // Keyword search in title and description using FULLTEXT index
     if (q && typeof q === 'string' && q.trim()) {
       whereClause.OR = whereClause.OR || [];
       const searchTerms = {
         OR: [
-          { title: { contains: q.trim() } },
-          { description: { contains: q.trim() } }
+          { title: { search: q.trim() } },
+          { description: { search: q.trim() } }
         ]
       };
 
@@ -1587,14 +1587,37 @@ app.get('/api/public/civic-actions', async (req, res) => {
       }
     }
 
-    // Location search (case-insensitive partial match)
-    if (location && typeof location === 'string' && location.trim()) {
+    // State search (exact match on indexed field)
+    if (state && typeof state === 'string' && state.trim()) {
       if (!whereClause.AND) {
         whereClause.AND = [];
       }
       whereClause.AND.push({
-        location: { contains: location.trim() }
+        state: { equals: state.trim().toUpperCase() }
       });
+    }
+
+    // Location search - detect zipcode and use appropriate search
+    if (location && typeof location === 'string' && location.trim()) {
+      const loc = location.trim();
+      if (!whereClause.AND) {
+        whereClause.AND = [];
+      }
+
+      // Check if location looks like a zipcode (5 digits or 5+4 format)
+      const isZipcode = /^\d{5}(-\d{4})?$/.test(loc);
+
+      if (isZipcode) {
+        // Exact match on zipcode field (indexed)
+        whereClause.AND.push({
+          zipcode: { startsWith: loc.substring(0, 5) }
+        });
+      } else {
+        // Partial match on location string
+        whereClause.AND.push({
+          location: { contains: loc }
+        });
+      }
     }
 
     // Only show approved civic actions to public
