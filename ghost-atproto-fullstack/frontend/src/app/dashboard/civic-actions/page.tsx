@@ -1401,13 +1401,9 @@ export default function CivicActionsPage() {
               const actionId = isUserSubmission ? (event.actionId || event.id.toString()) : null;
 
               const handleCardClick = () => {
-                if (isUserSubmission && actionId) {
-                  // Navigate to detail page for user-submitted actions using Next.js router
-                  router.push(`/dashboard/civic-actions/${actionId}`);
-                } else {
-                  // Open external link for Mobilize API events
-                  window.open(event.browser_url, '_blank');
-                }
+                // TODO: Define what should happen when clicking a card
+                // This is the civic actions DASHBOARD, not the Ghost editor card
+                // Cards are displayed here for browsing, but selection happens in Ghost editor via koenig-civic-action-card
               };
 
               return (
@@ -1434,7 +1430,6 @@ export default function CivicActionsPage() {
                       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                       border: '1px solid',
                       borderColor: 'grey.200',
-                      cursor: 'pointer',
                       '&:hover': {
                         transform: 'translateY(-8px)',
                         boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
@@ -1445,7 +1440,6 @@ export default function CivicActionsPage() {
                         },
                       },
                     }}
-                    onClick={handleCardClick}
                   >
                     {/* Featured Image or Gradient */}
                     {event.featured_image_url && !imageErrors.has(getEventIdAsNumber(event)) ? (
@@ -1677,50 +1671,6 @@ export default function CivicActionsPage() {
                           </Typography>
                         </Box>
                       </Stack>
-
-                      {/* Actions */}
-                      <Box sx={{ display: 'flex', gap: 1, mt: 'auto', width: '100%', position: 'relative' }}>
-                        <Button
-                          variant="outlined"
-                          sx={{
-                            textTransform: 'none',
-                            borderRadius: 2,
-                            py: 0.5,
-                            fontWeight: 600,
-                            fontSize: '0.8rem',
-                            flex: 1,
-                            minWidth: 0,
-                            '&:hover': {
-                              bgcolor: 'primary.main',
-                              color: 'white',
-                              borderColor: 'primary.main',
-                            },
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCardClick();
-                          }}
-                        >
-                          {isUserSubmission ? 'View Details' : 'Learn More'}
-                        </Button>
-                        <Button
-                          variant="contained"
-                          sx={{
-                            textTransform: 'none',
-                            borderRadius: 2,
-                            py: 0.5,
-                            fontWeight: 600,
-                            minWidth: 90,
-                            maxWidth: 90,
-                            fontSize: '0.8rem',
-                            flexShrink: 0,
-                          }}
-                          disabled
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Add to Article
-                        </Button>
-                      </Box>
                     </CardContent>
                   </Card>
                 </Box>

@@ -170,9 +170,25 @@ export async function syncMobilizeEvents(
             // Get earliest upcoming timeslot
             const eventDate = getEarliestUpcomingTimeslot(event.timeslots);
 
-            // Skip events with no upcoming timeslots
+            // Soft-delete events with no upcoming timeslots
             if (!eventDate) {
-              console.log(`  ⏭️  Skipping event ${event.id} - no upcoming timeslots`);
+              console.log(`  🗑️  Soft-deleting event ${event.id} - no upcoming timeslots`);
+
+              try {
+                await prisma.civicAction.updateMany({
+                  where: {
+                    source: 'mobilize',
+                    externalId: String(event.id),
+                    deletedAt: null // Only update if not already deleted
+                  },
+                  data: {
+                    deletedAt: new Date()
+                  }
+                });
+              } catch (updateError) {
+                console.error(`  ⚠️  Could not soft-delete event ${event.id}:`, updateError);
+              }
+
               totalSkipped++;
               continue;
             }
@@ -188,7 +204,7 @@ export async function syncMobilizeEvents(
               summary: event.summary
             }));
 
-            // Upsert civic action
+            // Upsert civic action (and undelete if it was previously soft-deleted)
             await prisma.civicAction.upsert({
               where: {
                 source_externalId: {
@@ -206,6 +222,8 @@ export async function syncMobilizeEvents(
                 externalUrl: event.browser_url,
                 state: event.location.region || null,
                 zipcode: event.location.postal_code || null,
+                isVirtual: event.is_virtual || false,
+                deletedAt: null, // Undelete if event got new timeslots
                 sourceMeta: sourceMeta,
                 status: 'approved',
                 updatedAt: new Date()
@@ -222,6 +240,7 @@ export async function syncMobilizeEvents(
                 source: 'mobilize',
                 state: event.location.region || null,
                 zipcode: event.location.postal_code || null,
+                isVirtual: event.is_virtual || false,
                 sourceMeta: sourceMeta,
                 status: 'approved',
                 userId: systemUser.id
