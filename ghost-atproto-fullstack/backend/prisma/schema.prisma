@@ -8,27 +8,28 @@ datasource db {
 }
 
 model User {
-  id                    String           @id @default(cuid())
-  email                 String           @unique
-  name                  String?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  blueskyHandle         String?          @map("bluesky_handle")
-  blueskyPassword       String?          @map("bluesky_password")
-  blueskyDid            String?
-  ghostApiKey           String?          @map("ghost_api_key")
-  ghostUrl              String?          @map("ghost_url")
-  ghostWebhookId        String?          @map("ghost_webhook_id")
-  ghostContentApiKey    String?          @map("ghost_content_api_key")
-  password              String
-  role                  Role             @default(USER)
-  autoSync              Boolean          @default(true) @map("auto_sync")
-  reviewedCivicActions  CivicAction[]    @relation("ReviewedActions")
-  submittedCivicActions CivicAction[]    @relation("SubmittedActions")
-  engagements           UserEngagement[]
-  oauthSessions         OAuthSession[]
-  posts                 Post[]
-  syncLogs              SyncLog[]
+  id                      String           @id @default(cuid())
+  email                   String           @unique
+  name                    String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  blueskyHandle           String?          @map("bluesky_handle")
+  blueskyPassword         String?          @map("bluesky_password")
+  blueskyDid              String?
+  ghostApiKey             String?          @map("ghost_api_key")
+  ghostUrl                String?          @map("ghost_url")
+  ghostWebhookId          String?          @map("ghost_webhook_id")
+  ghostContentApiKey      String?          @map("ghost_content_api_key")
+  password                String
+  role                    Role             @default(USER)
+  autoSync                Boolean          @default(true) @map("auto_sync")
+  reviewedCivicActions    CivicAction[]    @relation("ReviewedActions")
+  recommendedCivicActions CivicAction[]    @relation("RecommendedActions")
+  submittedCivicActions   CivicAction[]    @relation("SubmittedActions")
+  engagements             UserEngagement[]
+  oauthSessions           OAuthSession[]
+  posts                   Post[]
+  syncLogs                SyncLog[]
 
   @@map("users")
 }
@@ -113,6 +114,10 @@ model CivicAction {
   eventDate       DateTime?         @map("event_date")
   status          String            @default("pending")
   isPinned        Boolean           @default(false) @map("is_pinned")
+  isVirtual       Boolean?          @map("is_virtual")
+  deletedAt       DateTime?         @map("deleted_at")
+  priority        Int               @default(0)
+  recommendedBy   String?           @map("recommended_by")
   reviewedBy      String?           @map("reviewed_by")
   reviewedAt      DateTime?         @map("reviewed_at")
   rejectionReason String?           @map("rejection_reason") @db.Text
@@ -128,14 +133,19 @@ model CivicAction {
   zipcode         String?
   engagements     UserEngagement[]
   reviewer        User?             @relation("ReviewedActions", fields: [reviewedBy], references: [id])
+  recommender     User?             @relation("RecommendedActions", fields: [recommendedBy], references: [id])
   user            User              @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([source, externalId])
   @@index([reviewedBy], map: "civic_actions_reviewed_by_fkey")
   @@index([userId], map: "civic_actions_userId_fkey")
+  @@index([recommendedBy], map: "civic_actions_recommended_by_fkey")
   @@index([state])
   @@index([zipcode])
   @@index([externalId])
+  @@index([isVirtual])
+  @@index([deletedAt])
+  @@index([priority])
   @@fulltext([title, description])
   @@map("civic_actions")
 }

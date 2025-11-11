@@ -1555,7 +1555,10 @@ app.get('/api/public/civic-actions', async (req, res) => {
     const { q, location, state, includeExpired } = req.query;
 
     // Build where clause
-    const whereClause: any = { status: 'approved' };
+    const whereClause: any = {
+      status: 'approved',
+      deletedAt: null // Exclude soft-deleted events
+    };
 
     // Filter out expired events (unless explicitly requested)
     if (includeExpired !== 'true') {
@@ -1633,6 +1636,7 @@ app.get('/api/public/civic-actions', async (req, res) => {
       },
       orderBy: [
         { isPinned: 'desc' },
+        { priority: 'desc' },    // Higher priority first
         { eventDate: 'asc' },    // Soonest events first
         { createdAt: 'desc' }
       ]
@@ -1769,6 +1773,7 @@ app.get('/api/civic-actions', authenticateToken, async (req, res) => {
       },
       orderBy: [
         { isPinned: 'desc' },
+        { priority: 'desc' },    // Higher priority first
         { createdAt: 'desc' }
       ]
     });
@@ -1996,6 +2001,68 @@ app.post('/api/civic-actions/:id/toggle-pin', authenticateToken, async (req, res
   } catch (error) {
     console.error('Toggle pin error:', error);
     res.status(500).json({ error: 'Failed to toggle pin status' });
+  }
+});
+
+// Recommend civic action (admin only)
+app.post('/api/civic-actions/:id/recommend', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const civicAction = await prisma.civicAction.update({
+      where: { id },
+      data: {
+        recommendedBy: userId,
+      },
+      include: {
+        recommender: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          }
+        }
+      }
+    });
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Recommend civic action error:', error);
+    res.status(500).json({ error: 'Failed to recommend civic action' });
+  }
+});
+
+// Set priority (admin only)
+app.post('/api/civic-actions/:id/set-priority', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+    const { priority } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    if (typeof priority !== 'number' || priority < 0 || priority > 100) {
+      return res.status(400).json({ error: 'Priority must be a number between 0 and 100' });
+    }
+
+    const civicAction = await prisma.civicAction.update({
+      where: { id },
+      data: { priority }
+    });
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Set priority error:', error);
+    res.status(500).json({ error: 'Failed to set priority' });
   }
 });
 
