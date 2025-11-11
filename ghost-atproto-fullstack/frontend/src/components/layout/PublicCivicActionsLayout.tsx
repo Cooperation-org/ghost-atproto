@@ -21,6 +21,7 @@ import {
 import CloudIcon from '@mui/icons-material/Cloud';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import ArticleIcon from '@mui/icons-material/Article';
+import BarChartIcon from '@mui/icons-material/BarChart';
 import LoginIcon from '@mui/icons-material/Login';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -41,12 +42,13 @@ export function PublicCivicActionsLayout({ children }: { readonly children: Reac
       const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
       const cleanPath = basePath ? path.replace(basePath, '') : path;
       
-      // For civic actions pages, always use /dashboard/civic-actions
-      if (cleanPath.startsWith('/dashboard/civic-actions')) {
-        setCurrentTab('/dashboard/civic-actions');
-      } else if (cleanPath.startsWith('/dashboard') && user) {
-        // Only set /dashboard if user is authenticated
+      // Match tab routing logic from DashboardLayout
+      if (cleanPath === '/dashboard') {
         setCurrentTab('/dashboard');
+      } else if (cleanPath === '/dashboard/articles' || cleanPath.startsWith('/dashboard/articles/')) {
+        setCurrentTab('/dashboard/articles');
+      } else if (cleanPath === '/dashboard/civic-actions' || cleanPath.startsWith('/dashboard/civic-actions/')) {
+        setCurrentTab('/dashboard/civic-actions');
       } else {
         // Default to civic actions for public view
         setCurrentTab('/dashboard/civic-actions');
@@ -217,18 +219,26 @@ export function PublicCivicActionsLayout({ children }: { readonly children: Reac
             }}
           >
             {user && (
-              <Tab 
-                icon={<ArticleIcon />} 
-                iconPosition="start" 
-                label="Articles" 
-                value="/dashboard" 
-              />
+              <>
+                <Tab
+                  icon={<BarChartIcon />}
+                  iconPosition="start"
+                  label="Your Impact"
+                  value="/dashboard"
+                />
+                <Tab
+                  icon={<ArticleIcon />}
+                  iconPosition="start"
+                  label="Articles"
+                  value="/dashboard/articles"
+                />
+              </>
             )}
-            <Tab 
-              icon={<CampaignIcon />} 
-              iconPosition="start" 
-              label="Civic Actions" 
-              value="/dashboard/civic-actions" 
+            <Tab
+              icon={<CampaignIcon />}
+              iconPosition="start"
+              label="Civic Actions"
+              value="/dashboard/civic-actions"
             />
           </Tabs>
         </Box>

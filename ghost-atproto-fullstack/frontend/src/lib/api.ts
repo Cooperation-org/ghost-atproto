@@ -194,6 +194,25 @@ class ApiClient {
     return `${base}/api/auth/google`;
   }
 
+  // For Bluesky OAuth, redirect to backend with handle parameter
+  getBlueskyOAuthUrl(handle: string): string {
+    const base = getApiBase();
+    return `${base}/api/auth/bluesky?handle=${encodeURIComponent(handle)}`;
+  }
+
+  // Development-only: Bluesky app password authentication
+  async loginWithBlueskyDev(handle: string, password: string): Promise<LoginResponse> {
+    const data = await this.request<LoginResponse>('/api/auth/bluesky/dev', {
+      method: 'POST',
+      body: JSON.stringify({ handle, password }),
+    });
+    this.token = data.token;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('token', data.token);
+    }
+    return data;
+  }
+
   async getMe(): Promise<User> {
     return this.request<User>('/api/auth/me');
   }
