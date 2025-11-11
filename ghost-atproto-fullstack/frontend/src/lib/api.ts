@@ -16,33 +16,19 @@ export interface CivicActionDto {
   engagementCount?: number;
 }
 
-const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || '';
-const PUBLIC_BASE_PATH =
-  process.env.NEXT_PUBLIC_BASE_PATH?.replace(/\/$/, '') || '';
-const DEV_DEFAULT_API_URL =
-  process.env.NEXT_PUBLIC_DEV_API_URL?.replace(/\/$/, '') || 'http://127.0.0.1:5000';
-
-// Prefer explicit configuration when available, otherwise derive a sensible default.
+// Use 127.0.0.1 instead of localhost for AT Protocol OAuth (RFC 8252 requirement)
+// In production, use absolute URLs based on current origin to avoid mixed content issues
+// In development, use the configured API URL or default to localhost
 const getApiBase = (): string => {
-  if (PUBLIC_API_URL) {
-    return PUBLIC_API_URL;
-  }
-
+  // Client-side: use absolute URL based on current origin to ensure HTTPS
+  // This prevents mixed content errors and works with nginx proxy
   if (typeof window !== 'undefined') {
-    // When running the Next.js dev server, talk to the local backend directly.
-    if (
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.port === '3000'
-    ) {
-      return DEV_DEFAULT_API_URL;
-    }
-
-    return `${window.location.origin}${PUBLIC_BASE_PATH}`;
+    // Use the current origin (protocol + host) to ensure HTTPS is used
+    // This way it works on both IP and domain, and respects the current protocol
+    return window.location.origin;
   }
-
-  // Server-side (SSR/build) fallback
-  return DEV_DEFAULT_API_URL;
+  // Server-side: use the configured API URL
+  return process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
 };
 
 class ApiClient {
