@@ -44,6 +44,7 @@ jobs:
             log "Backend..."
             cd backend
             npm install
+            npx prisma migrate deploy
             npx prisma generate
             npm run build
             pm2 restart atproto-backend 2>/dev/null || pm2 start dist/index.js --name atproto-backend
