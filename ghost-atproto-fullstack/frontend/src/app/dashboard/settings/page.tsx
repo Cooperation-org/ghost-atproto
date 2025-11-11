@@ -114,10 +114,12 @@ export default function SettingsPage() {
       if (hasGhost) {
         try {
           setSyncing(true);
-          const result = await api.syncNow(50, false);
+          await api.syncNow(50, false);
           setSyncSuccess('Sync started. Your articles are being fetched from Ghost.');
-        } catch (syncErr: any) {
-          setSyncError(syncErr?.message || 'Failed to start sync');
+        } catch (syncErr: unknown) {
+          const message =
+            syncErr instanceof Error ? syncErr.message : 'Failed to start sync';
+          setSyncError(message);
         } finally {
           setSyncing(false);
         }
@@ -207,8 +209,10 @@ export default function SettingsPage() {
                   setSyncing(true);
                   await api.syncNow(50, false);
                   setSyncSuccess('Sync started. Your articles are being fetched from Ghost.');
-                } catch (e: any) {
-                  setSyncError(e?.message || 'Failed to start sync');
+                } catch (e: unknown) {
+                  const message =
+                    e instanceof Error ? e.message : 'Failed to start sync';
+                  setSyncError(message);
                 } finally {
                   setSyncing(false);
                 }
