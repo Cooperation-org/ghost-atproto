@@ -278,7 +278,7 @@ function LoginPageContent() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Enter your Bluesky handle. You'll be redirected to your server to authorize securely.
+            Enter your Bluesky handle. You&apos;ll be redirected to your server to authorize securely.
           </Typography>
           <TextField
             autoFocus
@@ -296,7 +296,7 @@ function LoginPageContent() {
           />
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="caption">
-              <strong>Secure OAuth!</strong> You'll authorize on your own Bluesky server. Your password never leaves your server.
+              <strong>Secure OAuth!</strong> You&apos;ll authorize on your own Bluesky server. Your password never leaves your server.
             </Typography>
           </Alert>
         </DialogContent>
