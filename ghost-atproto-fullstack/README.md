@@ -211,6 +211,147 @@ ATPROTO_SERVICE=https://bsky.social
 - Check app password is active in Bluesky settings
 - Review error in sync logs
 
+## Deployment Updates
+
+When deploying updates to the server:
+
+### 1. Pull Latest Changes
+```bash
+cd /path/to/ghost-atproto-fullstack
+git pull
+```
+
+### 2. Apply Database Migrations (if schema changed)
+```bash
+cd backend
+npx prisma db push
+```
+
+### 3. Restart Services
+```bash
+# Restart backend
+pm2 restart atproto-backend
+
+# If frontend also changed
+cd ../frontend
+npm run build
+pm2 restart atproto-frontend  # if using PM2 for frontend
+```
+
+## CI/CD and Server Environment Variables
+
+### How CI/CD Works
+
+The project uses GitHub Actions for continuous deployment:
+
+1. **PR Checks** (`.github/workflows/pr-checks.yml`)
+   - Runs on pull requests to `main` or `develop`
+   - Validates backend and frontend builds
+   - Runs security audits
+   - Must pass before merging
+
+2. **Deployment** (`.github/workflows/deploy.yml`)
+   - Triggers on push to `main` branch
+   - SSHes into production server as `civicsky` user
+   - Pulls latest code, builds, and restarts services via PM2
+   - Includes health checks and automatic rollback on failure
+
+### Setting Environment Variables on Server
+
+**Important**: Environment variables are set directly on the production server and are NOT managed by GitHub Actions or stored in the repository.
+
+#### Server Setup Steps:
+
+1. **SSH into the server as the deployment user:**
+   ```bash
+   ssh civicsky@your-server.com
+   ```
+
+2. **Navigate to the project directory:**
+   ```bash
+   cd ~/ghost-atproto/ghost-atproto-fullstack
+   ```
+
+3. **Create/edit backend `.env` file:**
+   ```bash
+   cd backend
+   nano .env
+   ```
+
+4. **Add required environment variables:**
+   ```bash
+   # Server Configuration
+   PORT=5000
+   NODE_ENV=production
+   APP_URL=https://bridge.linkedtrust.us
+   FRONTEND_URL=https://bridge.linkedtrust.us
+
+   # Database
+   DATABASE_URL="mysql://username:password@localhost:3306/ghost_atproto"
+
+   # Security
+   JWT_SECRET=your-secure-random-jwt-secret-here
+   GHOST_WEBHOOK_SECRET=your-webhook-secret-here
+
+   # Google OAuth (for user login)
+   GOOGLE_CLIENT_ID=your-google-client-id
+   GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+   # Bluesky OAuth (AT Protocol)
+   BLUESKY_CLIENT_ID=https://bridge.linkedtrust.us/client-metadata.json
+   BLUESKY_REDIRECT_URI=https://bridge.linkedtrust.us/api/auth/bluesky/callback
+
+   # AT Protocol Service
+   ATPROTO_SERVICE=https://bsky.social
+   ```
+
+5. **Create/edit frontend `.env.local` file:**
+   ```bash
+   cd ../frontend
+   nano .env.local
+   ```
+
+   ```bash
+   NEXT_PUBLIC_API_URL=https://bridge.linkedtrust.us
+   ```
+
+6. **Secure the `.env` files:**
+   ```bash
+   chmod 600 backend/.env
+   chmod 600 frontend/.env.local
+   ```
+
+7. **Verify environment variables are loaded:**
+   ```bash
+   cd backend && pm2 restart atproto-backend
+   cd ../frontend && pm2 restart atproto-frontend
+   pm2 logs --lines 50  # Check for any env variable errors
+   ```
+
+#### GitHub Secrets
+
+The following secrets must be configured in GitHub repository settings (Settings → Secrets and variables → Actions):
+
+- `SERVER_HOST`: Production server hostname/IP
+- `SERVER_USER`: SSH username (e.g., `civicsky`)
+- `SSH_PRIVATE_KEY`: Private SSH key for authentication
+
+**Note**: These secrets are only used for deployment access. Application secrets (OAuth keys, database passwords, etc.) are stored in `.env` files on the server.
+
+#### Updating Environment Variables
+
+When you need to update environment variables on the production server:
+
+1. SSH into the server
+2. Edit the appropriate `.env` file(s)
+3. Restart the affected service(s):
+   ```bash
+   pm2 restart atproto-backend  # if backend env changed
+   pm2 restart atproto-frontend # if frontend env changed
+   ```
+
+The CI/CD pipeline will preserve your `.env` files during deployments since they are gitignored.
+
 ## License
 
 MIT

@@ -35,8 +35,6 @@ function LoginPageContent() {
   // Bluesky OAuth dialog
   const [blueskyDialogOpen, setBlueskyDialogOpen] = useState(false);
   const [blueskyHandle, setBlueskyHandle] = useState('');
-  const [blueskyPassword, setBlueskyPassword] = useState('');
-  const [blueskyLoading, setBlueskyLoading] = useState(false);
 
   // Check for OAuth errors
   useEffect(() => {
@@ -110,36 +108,14 @@ function LoginPageContent() {
     window.location.href = api.getGoogleOAuthUrl();
   };
 
-  const handleBlueskyLogin = async () => {
+  const handleBlueskyLogin = () => {
     if (!blueskyHandle.trim()) {
       setError('Please enter your Bluesky handle');
       return;
     }
-    if (oauthConfig?.bluesky.requiresPassword && !blueskyPassword.trim()) {
-      setError('Please enter your Bluesky app password');
-      return;
-    }
 
-    setBlueskyLoading(true);
-    setError('');
-
-    try {
-      const res = await api.loginWithBluesky(blueskyHandle, blueskyPassword);
-      const role = res.user.role || 'USER';
-      setBlueskyDialogOpen(false);
-      
-      if (role === 'ADMIN') {
-        router.push('/dashboard/civic-actions');
-      } else if (role === 'AUTHOR') {
-        router.push('/bridge/wizard');
-      } else {
-        router.push('/dashboard');
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to login with Bluesky';
-      setError(msg);
-      setBlueskyLoading(false);
-    }
+    // Redirect to OAuth (just like Google)
+    window.location.href = api.getBlueskyOAuthUrl(blueskyHandle);
   };
 
   return (
@@ -288,9 +264,9 @@ function LoginPageContent() {
       </Box>
 
       {/* Bluesky Handle Dialog */}
-      <Dialog 
-        open={blueskyDialogOpen} 
-        onClose={() => !blueskyLoading && setBlueskyDialogOpen(false)}
+      <Dialog
+        open={blueskyDialogOpen}
+        onClose={() => setBlueskyDialogOpen(false)}
         maxWidth="sm"
         fullWidth
       >
@@ -302,10 +278,7 @@ function LoginPageContent() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            {oauthConfig?.bluesky.requiresPassword 
-              ? 'Sign in with your Bluesky account. Your credentials will be securely saved for automatic syncing.'
-              : 'Enter your Bluesky handle. You\'ll be redirected to your server to authorize securely.'
-            }
+            Enter your Bluesky handle. You'll be redirected to your server to authorize securely.
           </Typography>
           <TextField
             autoFocus
@@ -314,50 +287,29 @@ function LoginPageContent() {
             placeholder={oauthConfig?.bluesky.handlePlaceholder || 'your-handle.bsky.social'}
             value={blueskyHandle}
             onChange={(e) => setBlueskyHandle(e.target.value)}
-            disabled={blueskyLoading}
-            sx={{ mb: 2 }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && blueskyHandle.trim()) {
+                handleBlueskyLogin();
+              }
+            }}
             helperText="Example: alice.bsky.social"
           />
-          {oauthConfig?.bluesky.requiresPassword && (
-            <TextField
-              fullWidth
-              type="password"
-              label="App Password"
-              placeholder={oauthConfig?.bluesky.passwordPlaceholder || 'xxxx-xxxx-xxxx-xxxx'}
-              value={blueskyPassword}
-              onChange={(e) => setBlueskyPassword(e.target.value)}
-              disabled={blueskyLoading}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && blueskyHandle.trim() && blueskyPassword.trim()) {
-                  handleBlueskyLogin();
-                }
-              }}
-              helperText="Generate at bsky.app/settings/app-passwords"
-            />
-          )}
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="caption">
-              <strong>Secure & Automatic!</strong>{' '}
-              {oauthConfig?.bluesky.requiresPassword 
-                ? 'Use an app password (not your main password). Once signed in, posts sync automatically to Bluesky.'
-                : 'You\'ll authorize on your own Bluesky server. Your password never leaves your server.'
-              }
+              <strong>Secure OAuth!</strong> You'll authorize on your own Bluesky server. Your password never leaves your server.
             </Typography>
           </Alert>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button 
-            onClick={() => setBlueskyDialogOpen(false)} 
-            disabled={blueskyLoading}
-          >
+          <Button onClick={() => setBlueskyDialogOpen(false)}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleBlueskyLogin} 
+          <Button
+            onClick={handleBlueskyLogin}
             variant="contained"
-            disabled={blueskyLoading || !blueskyHandle.trim() || (oauthConfig?.bluesky.requiresPassword && !blueskyPassword.trim())}
+            disabled={!blueskyHandle.trim()}
           >
-            {blueskyLoading ? 'Signing in...' : 'Sign In'}
+            Continue
           </Button>
         </DialogActions>
       </Dialog>
