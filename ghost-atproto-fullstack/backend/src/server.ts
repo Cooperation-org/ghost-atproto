@@ -333,34 +333,83 @@ async function syncGhostPostsLocally(
           }
         }
 
-        // Upsert post in database
-        const dbPost = await prisma.post.upsert({
-          where: { ghostId },
-          update: {
-            title,
-            content,
-            excerpt,
-            featureImage,
-            slug,
-            status: 'published',
-            publishedAt,
-            ghostSlug: ghostSlug || undefined,
-            ghostUrl: ghostUrl || undefined,
-          },
-          create: {
-            title,
-            content,
-            excerpt,
-            featureImage,
-            slug,
-            status: 'published',
-            publishedAt,
-            ghostId,
-            ghostSlug: ghostSlug || undefined,
-            ghostUrl: ghostUrl || undefined,
-            userId: userId,
+        // Idempotent write: update if exists, otherwise create. On unique conflict, retry update.
+        let dbPost;
+        try {
+          dbPost = await prisma.post.update({
+            where: { ghostId },
+            data: {
+              title,
+              content,
+              excerpt,
+              featureImage,
+              slug,
+              status: 'published',
+              publishedAt,
+              ghostSlug: ghostSlug || undefined,
+              ghostUrl: ghostUrl || undefined,
+            }
+          });
+        } catch (err: any) {
+          if (err?.code === 'P2025') {
+            // Not found, create new
+            try {
+              dbPost = await prisma.post.create({
+                data: {
+                  title,
+                  content,
+                  excerpt,
+                  featureImage,
+                  slug,
+                  status: 'published',
+                  publishedAt,
+                  ghostId,
+                  ghostSlug: ghostSlug || undefined,
+                  ghostUrl: ghostUrl || undefined,
+                  userId: userId,
+                }
+              });
+            } catch (createErr: any) {
+              if (createErr?.code === 'P2002') {
+                // Unique conflict on ghostId - another process created it; perform update
+                dbPost = await prisma.post.update({
+                  where: { ghostId },
+                  data: {
+                    title,
+                    content,
+                    excerpt,
+                    featureImage,
+                    slug,
+                    status: 'published',
+                    publishedAt,
+                    ghostSlug: ghostSlug || undefined,
+                    ghostUrl: ghostUrl || undefined,
+                  }
+                });
+              } else {
+                throw createErr;
+              }
+            }
+          } else if (err?.code === 'P2002') {
+            // Unique constraint hit during update path - fallback to update again
+            dbPost = await prisma.post.update({
+              where: { ghostId },
+              data: {
+                title,
+                content,
+                excerpt,
+                featureImage,
+                slug,
+                status: 'published',
+                publishedAt,
+                ghostSlug: ghostSlug || undefined,
+                ghostUrl: ghostUrl || undefined,
+              }
+            });
+          } else {
+            throw err;
           }
-        });
+        }
 
         // Create sync log for local storage
         await prisma.syncLog.create({
@@ -1067,6 +1116,36 @@ app.put('/api/auth/me', authenticateToken, async (req, res) => {
     });
 
     res.json(user);
+
+    // Fire-and-forget: if Ghost credentials are present, validate, register webhook, and sync locally
+    (async () => {
+      try {
+        const gUrl = (ghostUrl ?? user.ghostUrl)?.toString().trim();
+        const gKey = (ghostApiKey ?? user.ghostApiKey)?.toString().trim();
+        if (gUrl && gKey && gUrl !== 'SKIPPED' && gKey !== 'SKIPPED') {
+          const isValid = await validateGhostConnection(gUrl, gKey);
+          if (!isValid) {
+            console.warn(`[Settings Auto-Sync] Invalid Ghost config for user ${userId}, skipping auto-sync.`);
+            return;
+          }
+          // Try to register webhook (best-effort)
+          try {
+            await registerGhostWebhook(gUrl, gKey, userId);
+          } catch (e) {
+            console.warn(`[Settings Auto-Sync] Webhook registration failed for user ${userId}:`, e);
+          }
+          // Sync posts locally (do not block response)
+          try {
+            await syncGhostPostsLocally(userId, gUrl, gKey, 50, false);
+            console.log(`[Settings Auto-Sync] Local Ghost sync completed for user ${userId}`);
+          } catch (e) {
+            console.error(`[Settings Auto-Sync] Local Ghost sync failed for user ${userId}:`, e);
+          }
+        }
+      } catch (e) {
+        console.error(`[Settings Auto-Sync] Unexpected error for user ${userId}:`, e);
+      }
+    })();
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user' });
