@@ -1,8 +1,7 @@
 'use client';
 
-import { isClient } from '@/lib/hydration-utils';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   Box,
   AppBar,
@@ -31,43 +30,28 @@ import { User } from '@/lib/types';
 
 export function DashboardLayout({ children }: { readonly children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [currentTab, setCurrentTab] = useState<string | false>('/dashboard/civic-actions');
 
   useEffect(() => {
-    // Update currentTab based on current path whenever it changes
-    const updateTab = () => {
-      if (isClient()) {
-        const path = window.location.pathname;
-        const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-        const cleanPath = basePath ? path.replace(basePath, '') : path;
+    // Update currentTab based on pathname
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    const cleanPath = basePath ? pathname.replace(basePath, '') : pathname;
 
-        // Match tab routing logic
-        if (cleanPath === '/dashboard') {
-          setCurrentTab('/dashboard');
-        } else if (cleanPath === '/dashboard/articles' || cleanPath.startsWith('/dashboard/articles/')) {
-          setCurrentTab('/dashboard/articles');
-        } else if (cleanPath === '/dashboard/civic-actions' || cleanPath.startsWith('/dashboard/civic-actions/')) {
-          setCurrentTab('/dashboard/civic-actions');
-        } else {
-          // Default to civic actions for public view
-          setCurrentTab('/dashboard/civic-actions');
-        }
-      }
-    };
-
-    // Update on mount
-    updateTab();
-
-    // Listen for navigation events
-    const handleRouteChange = () => updateTab();
-    window.addEventListener('popstate', handleRouteChange);
-
-    return () => {
-      window.removeEventListener('popstate', handleRouteChange);
-    };
-  }, []);
+    // Match tab routing logic
+    if (cleanPath === '/dashboard') {
+      setCurrentTab('/dashboard');
+    } else if (cleanPath === '/dashboard/articles' || cleanPath.startsWith('/dashboard/articles/')) {
+      setCurrentTab('/dashboard/articles');
+    } else if (cleanPath === '/dashboard/civic-actions' || cleanPath.startsWith('/dashboard/civic-actions/')) {
+      setCurrentTab('/dashboard/civic-actions');
+    } else {
+      // Default to civic actions for public view
+      setCurrentTab('/dashboard/civic-actions');
+    }
+  }, [pathname]);
 
   useEffect(() => {
     // Try to load user data (optional - doesn't redirect if fails)
