@@ -8,78 +8,81 @@ import {
   AppBar,
   Toolbar,
   Typography,
-  Divider,
   IconButton,
-  ListItemIcon,
-  CircularProgress,
   Avatar,
   Menu,
   MenuItem,
-  Chip,
   Tabs,
   Tab,
+  Button,
+  Divider,
+  ListItemIcon,
 } from '@mui/material';
-import SettingsIcon from '@mui/icons-material/Settings';
-import LogoutIcon from '@mui/icons-material/Logout';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
-import ArticleIcon from '@mui/icons-material/Article';
 import CloudIcon from '@mui/icons-material/Cloud';
 import CampaignIcon from '@mui/icons-material/Campaign';
+import ArticleIcon from '@mui/icons-material/Article';
 import BarChartIcon from '@mui/icons-material/BarChart';
+import LoginIcon from '@mui/icons-material/Login';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { api } from '@/lib/api';
 import { User } from '@/lib/types';
 
 export function DashboardLayout({ children }: { readonly children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [stats, setStats] = useState<{
-    totalPosts: number;
-    successfulSyncs: number;
-    failedSyncs: number;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [currentTab, setCurrentTab] = useState<string | false>('/dashboard');
+  const [currentTab, setCurrentTab] = useState<string | false>('/dashboard/civic-actions');
 
   useEffect(() => {
-    // Update currentTab based on current path
-    if (isClient()) {
-      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-      const rawPath = window.location.pathname;
-      const path = basePath ? rawPath.replace(basePath, '') : rawPath;
-      let matched: string | false = false;
-      if (path === '/dashboard') {
-        matched = '/dashboard';
-      } else if (path === '/dashboard/articles' || path.startsWith('/dashboard/articles/')) {
-        matched = '/dashboard/articles';
-      } else if (path === '/dashboard/civic-actions' || path.startsWith('/dashboard/civic-actions/')) {
-        matched = '/dashboard/civic-actions';
-      } else {
-        matched = false; // Do not highlight a tab for other dashboard subpages (e.g., settings, profile)
-      }
-      setCurrentTab(matched);
-    }
-  }, []);
+    // Update currentTab based on current path whenever it changes
+    const updateTab = () => {
+      if (isClient()) {
+        const path = window.location.pathname;
+        const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+        const cleanPath = basePath ? path.replace(basePath, '') : path;
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [userData, statsData] = await Promise.all([
-          api.getMe(),
-          api.getProfileStats(),
-        ]);
-        setUser(userData);
-        setStats(statsData);
-      } catch {
-        router.push('/login');
-      } finally {
-        setLoading(false);
+        // Match tab routing logic
+        if (cleanPath === '/dashboard') {
+          setCurrentTab('/dashboard');
+        } else if (cleanPath === '/dashboard/articles' || cleanPath.startsWith('/dashboard/articles/')) {
+          setCurrentTab('/dashboard/articles');
+        } else if (cleanPath === '/dashboard/civic-actions' || cleanPath.startsWith('/dashboard/civic-actions/')) {
+          setCurrentTab('/dashboard/civic-actions');
+        } else {
+          // Default to civic actions for public view
+          setCurrentTab('/dashboard/civic-actions');
+        }
       }
     };
 
-    loadData();
-  }, [router]);
+    // Update on mount
+    updateTab();
+
+    // Listen for navigation events
+    const handleRouteChange = () => updateTab();
+    window.addEventListener('popstate', handleRouteChange);
+
+    return () => {
+      window.removeEventListener('popstate', handleRouteChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Try to load user data (optional - doesn't redirect if fails)
+    const loadUser = async () => {
+      try {
+        const userData = await api.getMe();
+        setUser(userData);
+      } catch {
+        // User not logged in - this is fine for public pages
+        setUser(null);
+      }
+    };
+
+    loadUser();
+  }, []);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
     setCurrentTab(newValue);
@@ -101,16 +104,9 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
 
   const handleLogout = async () => {
     await api.logout();
-    router.push('/login');
+    setUser(null);
+    router.push('/dashboard/civic-actions'); // Stay on public page
   };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#fafafa' }}>
@@ -128,7 +124,7 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
                 opacity: 0.8
               }
             }}
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/dashboard/civic-actions')}
           >
             <CloudIcon sx={{ color: 'primary.main', fontSize: 32 }} />
             <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>
@@ -136,110 +132,77 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
             </Typography>
           </Box>
           
-          {/* Profile Avatar with Dropdown */}
-          <IconButton onClick={handleProfileClick} sx={{ p: 0 }}>
-            <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
-              {user?.name?.[0]?.toUpperCase() || user?.email[0].toUpperCase()}
-            </Avatar>
-          </IconButton>
-          
-          {/* Profile Dropdown Menu */}
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleProfileClose}
-            slotProps={{
-              paper: {
-                sx: { minWidth: 280, mt: 1 }
-              }
-            }}
-          >
-            {/* User Info */}
-            <Box sx={{ px: 2, py: 1.5 }}>
-              <Typography variant="subtitle1" fontWeight={600}>
-                {user?.name || 'User'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {user?.email}
-              </Typography>
+          {/* Show login/signup buttons if not logged in */}
+          {!user && (
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                startIcon={<LoginIcon />}
+                onClick={() => router.push('/login')}
+                sx={{ textTransform: 'none' }}
+              >
+                Login
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<PersonAddIcon />}
+                onClick={() => router.push('/signup')}
+                sx={{ textTransform: 'none' }}
+              >
+                Sign Up
+              </Button>
             </Box>
-            
-            <Divider />
-            
-            {/* Profile Stats - Clickable */}
-            <MenuItem 
-              onClick={() => {
-                handleProfileClose();
-                router.push('/dashboard/profile');
-              }}
-              sx={{ py: 2 }}
-            >
-              <Box sx={{ width: '100%' }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ mb: 1.5, display: 'block' }}>
-                  MY STATS
-                </Typography>
-                
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <ArticleIcon fontSize="small" color="primary" />
-                      <Typography variant="body2">Posts Synced</Typography>
-                    </Box>
-                    <Chip 
-                      label={stats?.totalPosts || 0} 
-                      size="small" 
-                      color="primary"
-                    />
-                  </Box>
-                  
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <CheckCircleIcon fontSize="small" color="success" />
-                      <Typography variant="body2">Successful</Typography>
-                    </Box>
-                    <Chip 
-                      label={stats?.successfulSyncs || 0} 
-                      size="small" 
-                      color="success"
-                    />
-                  </Box>
-                  
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <ErrorIcon fontSize="small" color="error" />
-                      <Typography variant="body2">Failed</Typography>
-                    </Box>
-                    <Chip 
-                      label={stats?.failedSyncs || 0} 
-                      size="small" 
-                      color="error"
-                    />
-                  </Box>
+          )}
+
+          {/* Show profile avatar if logged in */}
+          {user && (
+            <>
+              <IconButton onClick={handleProfileClick} sx={{ p: 0 }}>
+                <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+                  {user?.name?.[0]?.toUpperCase() || user?.email[0].toUpperCase()}
+                </Avatar>
+              </IconButton>
+              
+              {/* Profile Dropdown Menu */}
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleProfileClose}
+                slotProps={{
+                  paper: {
+                    sx: { minWidth: 200, mt: 1 }
+                  }
+                }}
+              >
+                {/* User Info */}
+                <Box sx={{ px: 2, py: 1.5 }}>
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    {user?.name || 'User'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {user?.email}
+                  </Typography>
                 </Box>
                 
-                <Typography variant="caption" color="primary.main" sx={{ mt: 1.5, display: 'block', textAlign: 'right' }}>
-                  View Details →
-                </Typography>
-              </Box>
-            </MenuItem>
-            
-            <Divider />
-            
-            {/* Settings & Logout */}
-            <MenuItem onClick={handleSettings}>
-              <ListItemIcon>
-                <SettingsIcon fontSize="small" />
-              </ListItemIcon>
-              Settings
-            </MenuItem>
-            
-            <MenuItem onClick={handleLogout}>
-              <ListItemIcon>
-                <LogoutIcon fontSize="small" />
-              </ListItemIcon>
-              Logout
-            </MenuItem>
-          </Menu>
+                <Divider />
+                
+                {/* Settings & Logout */}
+                <MenuItem onClick={handleSettings}>
+                  <ListItemIcon>
+                    <SettingsIcon fontSize="small" />
+                  </ListItemIcon>
+                  Settings
+                </MenuItem>
+                
+                <MenuItem onClick={handleLogout}>
+                  <ListItemIcon>
+                    <LogoutIcon fontSize="small" />
+                  </ListItemIcon>
+                  Logout
+                </MenuItem>
+              </Menu>
+            </>
+          )}
         </Toolbar>
       </AppBar>
       
@@ -256,8 +219,8 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
       }}>
         <Box sx={{ maxWidth: '1400px', mx: 'auto', px: 3 }}>
-          <Tabs
-            value={currentTab}
+          <Tabs 
+            value={currentTab} 
             onChange={handleTabChange}
             sx={{
               '& .MuiTab-root': {
@@ -268,18 +231,22 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
               }
             }}
           >
-            <Tab
-              icon={<BarChartIcon />}
-              iconPosition="start"
-              label="Your Impact"
-              value="/dashboard"
-            />
-            <Tab
-              icon={<ArticleIcon />}
-              iconPosition="start"
-              label="Articles"
-              value="/dashboard/articles"
-            />
+            {user && (
+              <>
+                <Tab
+                  icon={<BarChartIcon />}
+                  iconPosition="start"
+                  label="Your Impact"
+                  value="/dashboard"
+                />
+                <Tab
+                  icon={<ArticleIcon />}
+                  iconPosition="start"
+                  label="Articles"
+                  value="/dashboard/articles"
+                />
+              </>
+            )}
             <Tab
               icon={<CampaignIcon />}
               iconPosition="start"
@@ -306,3 +273,4 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
     </Box>
   );
 }
+

@@ -33,7 +33,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import CloudIcon from '@mui/icons-material/Cloud';
 import SearchIcon from '@mui/icons-material/Search';
-import { PublicCivicActionsLayout } from '@/components/layout/PublicCivicActionsLayout';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
 
 interface EventTimeslot {
@@ -479,16 +479,16 @@ export default function CivicActionsPage() {
 
   if (loading) {
     return (
-      <PublicCivicActionsLayout>
+      <DashboardLayout>
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
           <CircularProgress />
         </Box>
-      </PublicCivicActionsLayout>
+      </DashboardLayout>
     );
   }
 
   return (
-    <PublicCivicActionsLayout>
+    <DashboardLayout>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
           Civic Actions Management
@@ -1735,6 +1735,6 @@ export default function CivicActionsPage() {
           )}
         </>
       )}
-    </PublicCivicActionsLayout>
+    </DashboardLayout>
   );
 }
