@@ -14,13 +14,17 @@ export interface CivicActionDto {
   source?: string;
   isPinned?: boolean;
   engagementCount?: number;
+  embedCount?: number;
+  viewCount?: number;
 }
 
-const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || '';
+const PUBLIC_API_URL =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || '';
 const PUBLIC_BASE_PATH =
   process.env.NEXT_PUBLIC_BASE_PATH?.replace(/\/$/, '') || '';
 const DEV_DEFAULT_API_URL =
-  process.env.NEXT_PUBLIC_DEV_API_URL?.replace(/\/$/, '') || 'http://127.0.0.1:5000';
+  process.env.NEXT_PUBLIC_DEV_API_URL?.replace(/\/$/, '') ||
+  'http://127.0.0.1:5000';
 
 // Prefer explicit configuration when available, otherwise derive a sensible default.
 const getApiBase = (): string => {
@@ -54,15 +58,17 @@ class ApiClient {
       // Check if token is in URL (from OAuth redirect)
       const urlParams = new URLSearchParams(window.location.search);
       const urlToken = urlParams.get('token');
-      
+
       if (urlToken) {
         // Store token from URL
         localStorage.setItem('token', urlToken);
         this.token = urlToken;
-        
+
         // Remove token from URL to keep it clean
         urlParams.delete('token');
-        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        const newUrl =
+          window.location.pathname +
+          (urlParams.toString() ? '?' + urlParams.toString() : '');
         window.history.replaceState({}, '', newUrl);
       } else {
         // Load from localStorage
@@ -76,15 +82,17 @@ class ApiClient {
     if (isClient()) {
       const urlParams = new URLSearchParams(window.location.search);
       const urlToken = urlParams.get('token');
-      
+
       if (urlToken) {
         // Store token from URL
         localStorage.setItem('token', urlToken);
         this.token = urlToken;
-        
+
         // Remove token from URL to keep it clean
         urlParams.delete('token');
-        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        const newUrl =
+          window.location.pathname +
+          (urlParams.toString() ? '?' + urlParams.toString() : '');
         window.history.replaceState({}, '', newUrl);
       }
     }
@@ -96,7 +104,7 @@ class ApiClient {
   ): Promise<T> {
     // Check for token in URL on each request (in case we just redirected)
     this.extractTokenFromUrl();
-    
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -122,23 +130,25 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unable to read error response');
+      const errorText = await response
+        .text()
+        .catch(() => 'Unable to read error response');
       console.error(`[API] Request failed: ${url}`, {
         status: response.status,
         statusText: response.statusText,
         errorBody: errorText,
-        endpoint
+        endpoint,
       });
-      
+
       let error: ApiError;
       try {
         error = JSON.parse(errorText);
       } catch {
         error = {
-          error: `HTTP ${response.status}: ${response.statusText} - ${errorText}`
+          error: `HTTP ${response.status}: ${response.statusText} - ${errorText}`,
         };
       }
-      
+
       throw new Error(error.error || 'An error occurred');
     }
 
@@ -160,7 +170,12 @@ class ApiClient {
     return data;
   }
 
-  async signup(email: string, password: string, role: 'USER' | 'AUTHOR' | 'ADMIN', name?: string): Promise<LoginResponse> {
+  async signup(
+    email: string,
+    password: string,
+    role: 'USER' | 'AUTHOR' | 'ADMIN',
+    name?: string
+  ): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>('/api/auth/signup', {
       method: 'POST',
       body: JSON.stringify({ email, password, role, name }),
@@ -185,12 +200,22 @@ class ApiClient {
   // OAuth
   async getOAuthConfig(): Promise<{
     google: { enabled: boolean; buttonText: string };
-    bluesky: { enabled: boolean; buttonText: string; requiresHandle: boolean; requiresPassword?: boolean; handlePlaceholder: string; passwordPlaceholder?: string };
+    bluesky: {
+      enabled: boolean;
+      buttonText: string;
+      requiresHandle: boolean;
+      requiresPassword?: boolean;
+      handlePlaceholder: string;
+      passwordPlaceholder?: string;
+    };
   }> {
     return this.request('/api/auth/oauth/config');
   }
 
-  async loginWithBluesky(handle: string, password: string): Promise<LoginResponse> {
+  async loginWithBluesky(
+    handle: string,
+    password: string
+  ): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>('/api/auth/bluesky', {
       method: 'POST',
       body: JSON.stringify({ handle, password }),
@@ -215,7 +240,10 @@ class ApiClient {
   }
 
   // Development-only: Bluesky app password authentication
-  async loginWithBlueskyDev(handle: string, password: string): Promise<LoginResponse> {
+  async loginWithBlueskyDev(
+    handle: string,
+    password: string
+  ): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>('/api/auth/bluesky/dev', {
       method: 'POST',
       body: JSON.stringify({ handle, password }),
@@ -271,11 +299,14 @@ class ApiClient {
   }
 
   // Manual Sync
-  async syncNow(limit?: number, force?: boolean): Promise<{ 
-    message: string; 
-    success: boolean; 
-    syncedCount: number; 
-    skippedCount: number; 
+  async syncNow(
+    limit?: number,
+    force?: boolean
+  ): Promise<{
+    message: string;
+    success: boolean;
+    syncedCount: number;
+    skippedCount: number;
     totalProcessed: number;
   }> {
     return this.request('/api/auth/sync', {
@@ -290,7 +321,7 @@ class ApiClient {
   }
 
   // Civic Actions (user-submitted)
-  
+
   // PUBLIC: Get approved civic actions (no authentication required)
   async getPublicCivicActions(): Promise<CivicActionDto[]> {
     const base = getApiBase();
@@ -355,14 +386,20 @@ class ApiClient {
     });
   }
 
-  async approveCivicAction(id: string, pinned: boolean = false): Promise<CivicActionDto> {
+  async approveCivicAction(
+    id: string,
+    pinned: boolean = false
+  ): Promise<CivicActionDto> {
     return this.request<CivicActionDto>(`/api/civic-actions/${id}/approve`, {
       method: 'POST',
       body: JSON.stringify({ pinned }),
     });
   }
 
-  async rejectCivicAction(id: string, reason?: string): Promise<CivicActionDto> {
+  async rejectCivicAction(
+    id: string,
+    reason?: string
+  ): Promise<CivicActionDto> {
     return this.request<CivicActionDto>(`/api/civic-actions/${id}/reject`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
@@ -375,14 +412,17 @@ class ApiClient {
     });
   }
 
-  async updateCivicAction(id: string, data: {
-    title?: string;
-    description?: string;
-    eventType?: string;
-    location?: string;
-    eventDate?: string;
-    imageUrl?: string;
-  }): Promise<CivicActionDto> {
+  async updateCivicAction(
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      eventType?: string;
+      location?: string;
+      eventDate?: string;
+      imageUrl?: string;
+    }
+  ): Promise<CivicActionDto> {
     return this.request<CivicActionDto>(`/api/civic-actions/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -423,7 +463,11 @@ class ApiClient {
     return this.request('/api/user/impact');
   }
 
-  async createEngagement(civicActionId: string, status?: string, notes?: string): Promise<{
+  async createEngagement(
+    civicActionId: string,
+    status?: string,
+    notes?: string
+  ): Promise<{
     id: string;
     userId: string;
     civicActionId: string;
@@ -436,7 +480,11 @@ class ApiClient {
     });
   }
 
-  async updateEngagement(id: string, status?: string, notes?: string): Promise<{
+  async updateEngagement(
+    id: string,
+    status?: string,
+    notes?: string
+  ): Promise<{
     id: string;
     userId: string;
     civicActionId: string;
@@ -456,9 +504,9 @@ class ApiClient {
   }
 
   // Civic Events (Mobilize API)
-  async getCivicEvents(params?: { 
-    cursor?: string; 
-    zipcode?: string; 
+  async getCivicEvents(params?: {
+    cursor?: string;
+    zipcode?: string;
     organization_id?: string;
     event_type?: string;
     event_types?: string[];
@@ -510,46 +558,92 @@ class ApiClient {
     }>;
   }> {
     const queryParams = new URLSearchParams();
-    
+
     // Basic filters
     if (params?.cursor) queryParams.append('cursor', params.cursor);
     if (params?.zipcode) queryParams.append('zipcode', params.zipcode);
-    if (params?.organization_id) queryParams.append('organization_id', params.organization_id);
+    if (params?.organization_id)
+      queryParams.append('organization_id', params.organization_id);
     if (params?.state) queryParams.append('state', params.state);
-    if (params?.updated_since) queryParams.append('updated_since', params.updated_since);
+    if (params?.updated_since)
+      queryParams.append('updated_since', params.updated_since);
     if (params?.visibility) queryParams.append('visibility', params.visibility);
-    if (params?.max_dist) queryParams.append('max_dist', params.max_dist.toString());
-    if (params?.event_campaign_id) queryParams.append('event_campaign_id', params.event_campaign_id);
-    
+    if (params?.max_dist)
+      queryParams.append('max_dist', params.max_dist.toString());
+    if (params?.event_campaign_id)
+      queryParams.append('event_campaign_id', params.event_campaign_id);
+
     // Event type filters
     if (params?.event_type) queryParams.append('event_type', params.event_type);
     if (params?.event_types) {
-      params.event_types.forEach(type => queryParams.append('event_types', type));
+      params.event_types.forEach((type) =>
+        queryParams.append('event_types', type)
+      );
     }
-    
+
     // Boolean filters
-    if (params?.is_virtual !== undefined) queryParams.append('is_virtual', params.is_virtual.toString());
-    if (params?.exclude_full !== undefined) queryParams.append('exclude_full', params.exclude_full.toString());
-    if (params?.high_priority_only !== undefined) queryParams.append('high_priority_only', params.high_priority_only.toString());
-    
+    if (params?.is_virtual !== undefined)
+      queryParams.append('is_virtual', params.is_virtual.toString());
+    if (params?.exclude_full !== undefined)
+      queryParams.append('exclude_full', params.exclude_full.toString());
+    if (params?.high_priority_only !== undefined)
+      queryParams.append(
+        'high_priority_only',
+        params.high_priority_only.toString()
+      );
+
     // Date/time filters
-    if (params?.timeslot_start_after) queryParams.append('timeslot_start_after', params.timeslot_start_after);
-    if (params?.timeslot_start_before) queryParams.append('timeslot_start_before', params.timeslot_start_before);
-    if (params?.timeslot_start) queryParams.append('timeslot_start', params.timeslot_start);
-    if (params?.timeslot_end) queryParams.append('timeslot_end', params.timeslot_end);
-    
+    if (params?.timeslot_start_after)
+      queryParams.append('timeslot_start_after', params.timeslot_start_after);
+    if (params?.timeslot_start_before)
+      queryParams.append('timeslot_start_before', params.timeslot_start_before);
+    if (params?.timeslot_start)
+      queryParams.append('timeslot_start', params.timeslot_start);
+    if (params?.timeslot_end)
+      queryParams.append('timeslot_end', params.timeslot_end);
+
     // Tag filters
     if (params?.tag_id) {
-      params.tag_id.forEach(tag => queryParams.append('tag_id', tag));
+      params.tag_id.forEach((tag) => queryParams.append('tag_id', tag));
     }
-    
+
     // Approval status filters
     if (params?.approval_status) {
-      params.approval_status.forEach(status => queryParams.append('approval_status', status));
+      params.approval_status.forEach((status) =>
+        queryParams.append('approval_status', status)
+      );
     }
-    
+
     const queryString = queryParams.toString();
-    return this.request(`/api/civic-events${queryString ? `?${queryString}` : ''}`);
+    return this.request(
+      `/api/civic-events${queryString ? `?${queryString}` : ''}`
+    );
+  }
+
+  // Track embed - call when an author embeds a civic action in an article
+  async trackEmbed(
+    civicActionId: string,
+    authorId?: string
+  ): Promise<{
+    success: boolean;
+    embedCount: number;
+    viewCount: number;
+  }> {
+    return this.request(`/api/civic-actions/${civicActionId}/track-embed`, {
+      method: 'POST',
+      body: JSON.stringify({ authorId }),
+    });
+  }
+
+  // Track view - call when a user views a civic action
+  async trackView(civicActionId: string): Promise<{
+    success: boolean;
+    embedCount: number;
+    viewCount: number;
+  }> {
+    return this.request(`/api/civic-actions/${civicActionId}/track-view`, {
+      method: 'POST',
+    });
   }
 }
 
