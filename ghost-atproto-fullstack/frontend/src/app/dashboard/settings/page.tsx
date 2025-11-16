@@ -21,7 +21,6 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import WebhookIcon from '@mui/icons-material/Webhook';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import SyncIcon from '@mui/icons-material/Sync';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
 import { User } from '@/lib/types';
@@ -34,9 +33,6 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
-  const [syncing, setSyncing] = useState(false);
-  const [syncSuccess, setSyncSuccess] = useState('');
-  const [syncError, setSyncError] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -78,8 +74,6 @@ export default function SettingsPage() {
     setSaving(true);
     setError('');
     setSuccess('');
-    setSyncSuccess('');
-    setSyncError('');
 
     try {
       const updateData: {
@@ -107,23 +101,6 @@ export default function SettingsPage() {
       const updatedUser = await api.updateMe(updateData);
       setUser(updatedUser);
       setSuccess('Settings saved successfully!');
-      
-      // Auto-trigger sync if Ghost settings are present
-      const hasGhost = (updateData.ghostUrl && updateData.ghostUrl.trim() !== '') &&
-                       (updateData.ghostApiKey && updateData.ghostApiKey.trim() !== '');
-      if (hasGhost) {
-        try {
-          setSyncing(true);
-          await api.syncNow(50, false);
-          setSyncSuccess('Sync started. Your articles are being fetched from Ghost.');
-        } catch (syncErr: unknown) {
-          const message =
-            syncErr instanceof Error ? syncErr.message : 'Failed to start sync';
-          setSyncError(message);
-        } finally {
-          setSyncing(false);
-        }
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save settings');
     } finally {
@@ -194,45 +171,9 @@ export default function SettingsPage() {
       </Paper>
 
       <Paper sx={{ p: 3, mt: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h6" gutterBottom>
-            Ghost Configuration
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant="outlined"
-              startIcon={syncing ? <CircularProgress size={18} color="inherit" /> : <SyncIcon />}
-              onClick={async () => {
-                setSyncSuccess('');
-                setSyncError('');
-                try {
-                  setSyncing(true);
-                  await api.syncNow(50, false);
-                  setSyncSuccess('Sync started. Your articles are being fetched from Ghost.');
-                } catch (e: unknown) {
-                  const message =
-                    e instanceof Error ? e.message : 'Failed to start sync';
-                  setSyncError(message);
-                } finally {
-                  setSyncing(false);
-                }
-              }}
-              disabled={syncing || !formData.ghostUrl || !formData.ghostApiKey}
-            >
-              {syncing ? 'Syncing...' : 'Sync now'}
-            </Button>
-          </Box>
-        </Box>
-        {syncSuccess && (
-          <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSyncSuccess('')}>
-            {syncSuccess}
-          </Alert>
-        )}
-        {syncError && (
-          <Alert severity="error" sx={{ mt: 2 }} onClose={() => setSyncError('')}>
-            {syncError}
-          </Alert>
-        )}
+        <Typography variant="h6" gutterBottom>
+          Ghost Configuration
+        </Typography>
         <Grid container spacing={2} sx={{ mt: 1 }}>
           <Grid size={{ xs: 12 }}>
             <TextField
