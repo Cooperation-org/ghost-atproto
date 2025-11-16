@@ -18,6 +18,8 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ArticleIcon from '@mui/icons-material/Article';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api, CivicActionDto } from '@/lib/api';
 
@@ -39,16 +41,36 @@ export default function CivicActionDetailPage() {
     async function loadAction() {
       try {
         setLoading(true);
+        let loadedAction: CivicActionDetail | null = null;
+        
         // Try public API first (works without authentication)
         try {
-          const data = await api.getPublicCivicActionById(id);
-          setAction(data);
+          loadedAction = await api.getPublicCivicActionById(id);
+          setAction(loadedAction);
           setError(null);
         } catch {
           // If public API fails, try authenticated API (for pending/rejected actions owned by user or admin)
-          const data = await api.getCivicActionById(id);
-          setAction(data);
+          loadedAction = await api.getCivicActionById(id);
+          setAction(loadedAction);
           setError(null);
+        }
+        
+        // Track view after successfully loading the action
+        if (id && loadedAction) {
+          try {
+            const trackingResult = await api.trackView(id);
+            // Update the action with latest counts
+            if (trackingResult.success) {
+              setAction({
+                ...loadedAction,
+                viewCount: trackingResult.viewCount,
+                embedCount: trackingResult.embedCount,
+              });
+            }
+          } catch (err) {
+            // Silently fail - tracking is not critical
+            console.warn('Failed to track view:', err);
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load civic action');
@@ -266,6 +288,32 @@ export default function CivicActionDetailPage() {
                       size="small"
                       sx={{ fontWeight: 600 }}
                     />
+                  </Box>
+
+                  {/* Embed Count */}
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      <ArticleIcon
+                        sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }}
+                      />
+                      Embedded in Articles
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {action.embedCount ?? 0} {action.embedCount === 1 ? 'article' : 'articles'}
+                    </Typography>
+                  </Box>
+
+                  {/* View Count */}
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      <VisibilityIcon
+                        sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }}
+                      />
+                      Total Views
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {action.viewCount ?? 0} {action.viewCount === 1 ? 'view' : 'views'}
+                    </Typography>
                   </Box>
                 </Stack>
 

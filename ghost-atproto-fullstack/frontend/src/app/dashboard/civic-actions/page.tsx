@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Paper,
   Typography,
@@ -85,7 +84,6 @@ interface CivicEventsResponse {
 }
 
 export default function CivicActionsPage() {
-  const router = useRouter();
   const [events, setEvents] = useState<CivicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1396,15 +1394,6 @@ export default function CivicActionsPage() {
               const gradient = gradients[index % gradients.length];
 
               // Check if this is a user-submitted civic action
-              const isUserSubmission = event.sponsor.name === 'Community Action';
-              // Use actionId if available (database civic action), otherwise use the event ID
-              const actionId = isUserSubmission ? (event.actionId || event.id.toString()) : null;
-
-              const handleCardClick = () => {
-                // TODO: Define what should happen when clicking a card
-                // This is the civic actions DASHBOARD, not the Ghost editor card
-                // Cards are displayed here for browsing, but selection happens in Ghost editor via koenig-civic-action-card
-              };
 
               return (
                 <Box
