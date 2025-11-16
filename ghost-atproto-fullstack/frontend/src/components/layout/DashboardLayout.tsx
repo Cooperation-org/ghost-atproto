@@ -35,13 +35,6 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [currentTab, setCurrentTab] = useState<string | false>('/dashboard/civic-actions');
 
-  const tabOptions = user
-    ? ['/dashboard', '/dashboard/articles', '/dashboard/civic-actions']
-    : ['/dashboard/civic-actions'];
-  const activeTab = tabOptions.includes(String(currentTab))
-    ? currentTab
-    : tabOptions[tabOptions.length - 1];
-
   useEffect(() => {
     // Update currentTab based on pathname
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
@@ -211,7 +204,7 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
       }}>
         <Box sx={{ maxWidth: '1400px', mx: 'auto', px: 3 }}>
           <Tabs 
-            value={activeTab} 
+            value={currentTab} 
             onChange={handleTabChange}
             sx={{
               '& .MuiTab-root': {
@@ -222,22 +215,22 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
               }
             }}
           >
-            {user && [
-              <Tab
-                key="dashboard"
-                icon={<BarChartIcon />}
-                iconPosition="start"
-                label="Your Impact"
-                value="/dashboard"
-              />,
-              <Tab
-                key="articles"
-                icon={<ArticleIcon />}
-                iconPosition="start"
-                label="Articles"
-                value="/dashboard/articles"
-              />
-            ]}
+            {user && (
+              <>
+                <Tab
+                  icon={<BarChartIcon />}
+                  iconPosition="start"
+                  label="Your Impact"
+                  value="/dashboard"
+                />
+                <Tab
+                  icon={<ArticleIcon />}
+                  iconPosition="start"
+                  label="Articles"
+                  value="/dashboard/articles"
+                />
+              </>
+            )}
             <Tab
               icon={<CampaignIcon />}
               iconPosition="start"

@@ -106,37 +106,35 @@ model Settings {
 }
 
 model CivicAction {
-  id              String           @id @default(cuid())
+  id              String            @id @default(cuid())
   title           String
-  description     String           @db.Text
-  eventType       String?          @map("event_type")
+  description     String            @db.Text
+  eventType       String?           @map("event_type")
   location        String?
-  eventDate       DateTime?        @map("event_date")
-  status          String           @default("pending")
-  isPinned        Boolean          @default(false) @map("is_pinned")
-  isVirtual       Boolean?         @map("is_virtual")
-  deletedAt       DateTime?        @map("deleted_at")
-  priority        Int              @default(0)
-  recommendedBy   String?          @map("recommended_by")
-  reviewedBy      String?          @map("reviewed_by")
-  reviewedAt      DateTime?        @map("reviewed_at")
-  rejectionReason String?          @map("rejection_reason") @db.Text
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  eventDate       DateTime?         @map("event_date")
+  status          String            @default("pending")
+  isPinned        Boolean           @default(false) @map("is_pinned")
+  isVirtual       Boolean?          @map("is_virtual")
+  deletedAt       DateTime?         @map("deleted_at")
+  priority        Int               @default(0)
+  recommendedBy   String?           @map("recommended_by")
+  reviewedBy      String?           @map("reviewed_by")
+  reviewedAt      DateTime?         @map("reviewed_at")
+  rejectionReason String?           @map("rejection_reason") @db.Text
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   userId          String
-  imageUrl        String?          @map("image_url") @db.LongText
-  source          String           @default("user_submitted")
-  externalId      String?          @map("external_id")
-  externalUrl     String?          @map("external_url")
-  sourceMeta      Json?            @map("source_meta")
+  imageUrl        String?           @map("image_url") @db.LongText
+  source          String            @default("user_submitted")
+  externalId      String?           @map("external_id")
+  externalUrl     String?           @map("external_url")
+  sourceMeta      Json?             @map("source_meta")
   state           String?
   zipcode         String?
-  embedCount      Int              @default(0) @map("embed_count")
-  viewCount       Int              @default(0) @map("view_count")
   engagements     UserEngagement[]
-  reviewer        User?            @relation("ReviewedActions", fields: [reviewedBy], references: [id])
-  recommender     User?            @relation("RecommendedActions", fields: [recommendedBy], references: [id])
-  user            User             @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer        User?             @relation("ReviewedActions", fields: [reviewedBy], references: [id])
+  recommender     User?             @relation("RecommendedActions", fields: [recommendedBy], references: [id])
+  user            User              @relation("SubmittedActions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([source, externalId])
   @@index([reviewedBy], map: "civic_actions_reviewed_by_fkey")
@@ -153,15 +151,15 @@ model CivicAction {
 }
 
 model UserEngagement {
-  id            String      @id @default(cuid())
-  userId        String      @map("user_id")
-  civicActionId String      @map("civic_action_id")
-  status        String      @default("interested")
-  notes         String?     @db.Text
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  civicAction   CivicAction @relation(fields: [civicActionId], references: [id], onDelete: Cascade)
+  id            String       @id @default(cuid())
+  userId        String       @map("user_id")
+  civicActionId String       @map("civic_action_id")
+  status        String       @default("interested")
+  notes         String?      @db.Text
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  civicAction   CivicAction  @relation(fields: [civicActionId], references: [id], onDelete: Cascade)
 
   @@unique([userId, civicActionId])
   @@index([userId], map: "user_engagements_user_id_fkey")

@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import morgan from 'morgan';
+import morgan from 'morgan'
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
@@ -33,8 +33,7 @@ const prisma = new PrismaClient();
 let oauthClient: NodeOAuthClient | null = null;
 
 // JWT Secret
-const JWT_SECRET =
-  process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Trust proxy - required for x-forwarded-proto to work correctly behind nginx
 // This allows Express to trust the X-Forwarded-* headers set by nginx
@@ -43,26 +42,22 @@ app.set('trust proxy', true);
 // Middleware
 app.use(morgan('dev'));
 
-app.use(
-  cors({
-    origin: true, // Allow all origins
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: true, // Allow all origins
+  credentials: true
+}));
 
 app.use(cookieParser());
-app.use(
-  session({
-    secret: JWT_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === 'production',
-      httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    },
-  })
-);
+app.use(session({
+  secret: JWT_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
 
 // Initialize Passport for OAuth
 app.use(passport.initialize());
@@ -80,8 +75,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // Auth middleware
 function authenticateToken(req: any, res: any, next: any) {
-  const token =
-    req.cookies.token || req.header('Authorization')?.replace('Bearer ', '');
+  const token = req.cookies.token || req.header('Authorization')?.replace('Bearer ', '');
 
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
@@ -97,11 +91,7 @@ function authenticateToken(req: any, res: any, next: any) {
 }
 
 // Helper: Register webhook with Ghost
-export async function registerGhostWebhook(
-  ghostUrl: string,
-  ghostApiKey: string,
-  userId: string
-): Promise<string | null> {
+export async function registerGhostWebhook(ghostUrl: string, ghostApiKey: string, userId: string): Promise<string | null> {
   try {
     const [keyId, keySecret] = ghostApiKey.split(':');
     if (!keyId || !keySecret) {
@@ -113,28 +103,23 @@ export async function registerGhostWebhook(
       keyid: keyId,
       algorithm: 'HS256',
       expiresIn: '5m',
-      audience: `/admin/`,
+      audience: `/admin/`
     });
 
-    const webhookUrl = `${
-      process.env.BACKEND_URL || 'http://204.236.176.29'
-    }/api/ghost/webhook`;
-
+    const webhookUrl = `${process.env.BACKEND_URL || 'http://204.236.176.29'}/api/ghost/webhook`;
+    
     // Check if webhook already exists
-    const existingWebhooks = await axios.get(
-      `${ghostUrl}/ghost/api/admin/webhooks/`,
-      {
-        headers: {
-          Authorization: `Ghost ${token}`,
-          'Accept-Version': 'v6.4',
-        },
+    const existingWebhooks = await axios.get(`${ghostUrl}/ghost/api/admin/webhooks/`, {
+      headers: {
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v6.4'
       }
-    );
+    });
 
     // Look for existing webhook with our URL
-    const existingWebhook = existingWebhooks.data.webhooks?.find(
-      (webhook: any) =>
-        webhook.target_url === webhookUrl && webhook.event === 'post.published'
+    const existingWebhook = existingWebhooks.data.webhooks?.find((webhook: any) => 
+      webhook.target_url === webhookUrl && 
+      webhook.event === 'post.published'
     );
 
     if (existingWebhook) {
@@ -149,25 +134,22 @@ export async function registerGhostWebhook(
         target_url: webhookUrl,
         name: 'Bluesky Publisher',
         secret: process.env.GHOST_WEBHOOK_SECRET || '',
-        integration_id: null,
-      },
+        integration_id: null
+      }
     };
 
-    const response = await axios.post(
-      `${ghostUrl}/ghost/api/admin/webhooks/`,
-      webhookData,
-      {
-        headers: {
-          Authorization: `Ghost ${token}`,
-          'Accept-Version': 'v6.4',
-          'Content-Type': 'application/json',
-        },
+    const response = await axios.post(`${ghostUrl}/ghost/api/admin/webhooks/`, webhookData, {
+      headers: {
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v6.4',
+        'Content-Type': 'application/json'
       }
-    );
+    });
 
     const webhookId = response.data.webhooks?.[0]?.id;
     console.log(`✅ Webhook registered: ${webhookId}`);
     return webhookId;
+
   } catch (error) {
     console.error('Failed to register Ghost webhook:', error);
     return null;
@@ -175,10 +157,7 @@ export async function registerGhostWebhook(
 }
 
 // Helper: Validate Ghost connection
-export async function validateGhostConnection(
-  ghostUrl: string,
-  ghostApiKey: string
-): Promise<boolean> {
+export async function validateGhostConnection(ghostUrl: string, ghostApiKey: string): Promise<boolean> {
   try {
     const [keyId, keySecret] = ghostApiKey.split(':');
     if (!keyId || !keySecret) {
@@ -190,15 +169,15 @@ export async function validateGhostConnection(
       keyid: keyId,
       algorithm: 'HS256',
       expiresIn: '5m',
-      audience: `/admin/`,
+      audience: `/admin/`
     });
 
     // Test connection by fetching site info
     const response = await axios.get(`${ghostUrl}/ghost/api/admin/site/`, {
       headers: {
-        Authorization: `Ghost ${token}`,
-        'Accept-Version': 'v6.4',
-      },
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v6.4'
+      }
     });
 
     return response.status === 200;
@@ -212,7 +191,7 @@ export async function validateGhostConnection(
 async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { oauthSessions: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    include: { oauthSessions: { orderBy: { createdAt: 'desc' }, take: 1 } }
   });
 
   if (!user) return null;
@@ -223,14 +202,10 @@ async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
     try {
       // Check if token is expired (expiresAt should exist on OAuthSession)
       if (session.expiresAt && new Date(session.expiresAt) > new Date()) {
-        const agent = new BskyAgent({
-          service: process.env.ATPROTO_SERVICE || 'https://bsky.social',
-        });
+        const agent = new BskyAgent({ service: process.env.ATPROTO_SERVICE || 'https://bsky.social' });
         // TODO: Implement DPoP token usage with OAuth client
         // For now, this is a placeholder for OAuth token restoration
-        console.log(
-          'OAuth session available but token restoration needs implementation'
-        );
+        console.log('OAuth session available but token restoration needs implementation');
       }
     } catch (error) {
       console.error('OAuth session restore failed:', error);
@@ -240,9 +215,7 @@ async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
   // Fallback to app password
   if (user.blueskyHandle && user.blueskyPassword) {
     try {
-      const agent = new BskyAgent({
-        service: process.env.ATPROTO_SERVICE || 'https://bsky.social',
-      });
+      const agent = new BskyAgent({ service: process.env.ATPROTO_SERVICE || 'https://bsky.social' });
       await agent.login({
         identifier: user.blueskyHandle,
         password: user.blueskyPassword,
@@ -258,31 +231,23 @@ async function getAgentForUser(userId: string): Promise<BskyAgent | null> {
 }
 
 // Helper: Post to Bluesky with clickable links and better content formatting
-async function postToBluesky(
-  agent: BskyAgent,
-  title: string,
-  content?: string,
-  url?: string
-) {
+async function postToBluesky(agent: BskyAgent, title: string, content?: string, url?: string) {
   // Strip HTML tags and get clean text from content
-  const cleanContent = content
-    ? content
-        .replace(/<[^>]*>/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
+  const cleanContent = content 
+    ? content.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
     : '';
-
+  
   // Create a better formatted post with maximum content
   // Bluesky limit is 300 chars, so we maximize the content
   const urlText = url ? `\n\n🔗 ${url}` : '';
   const titleText = `${title}\n\n`;
   const maxContentLength = 300 - titleText.length - urlText.length;
-
+  
   let contentToPost = cleanContent;
   if (contentToPost.length > maxContentLength) {
     contentToPost = contentToPost.substring(0, maxContentLength - 3) + '...';
   }
-
+  
   const postText = `${titleText}${contentToPost}${urlText}`;
 
   // Use RichText to detect and create link facets
@@ -305,9 +270,7 @@ async function syncGhostPostsLocally(
   force: boolean = false
 ) {
   try {
-    console.log(
-      `\n🔄 Starting local sync for ${ghostUrl} (user: ${userId})...`
-    );
+    console.log(`\n🔄 Starting local sync for ${ghostUrl} (user: ${userId})...`);
 
     // Fetch Ghost posts using Admin API
     const [keyId, keySecret] = ghostApiKey.split(':');
@@ -320,23 +283,22 @@ async function syncGhostPostsLocally(
       keyid: keyId,
       algorithm: 'HS256',
       expiresIn: '5m',
-      audience: `/admin/`,
+      audience: `/admin/`
     });
 
     const ghostApiUrl = `${ghostUrl}/ghost/api/admin/posts/`;
     const response = await axios.get(ghostApiUrl, {
       headers: {
-        Authorization: `Ghost ${token}`,
-        'Accept-Version': 'v6.4',
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v6.4'
       },
       params: {
         limit,
         filter: 'status:published',
         order: 'published_at DESC',
-        fields:
-          'id,title,slug,excerpt,custom_excerpt,html,plaintext,mobiledoc,lexical,feature_image,url,published_at',
-        formats: 'html,plaintext,mobiledoc',
-      },
+        fields: 'id,title,slug,excerpt,custom_excerpt,html,plaintext,mobiledoc,lexical,feature_image,url,published_at',
+        formats: 'html,plaintext,mobiledoc'
+      }
     });
 
     const posts = response.data.posts || [];
@@ -356,16 +318,14 @@ async function syncGhostPostsLocally(
         const slug = post.slug || `ghost-${ghostId}`;
         const ghostSlug = post.slug || null;
         const ghostUrl = post.url || null;
-        const publishedAt = post.published_at
-          ? new Date(post.published_at)
-          : new Date();
+        const publishedAt = post.published_at ? new Date(post.published_at) : new Date();
 
         // Check if post already exists (unless force is true)
         if (!force) {
           const existingPost = await prisma.post.findUnique({
-            where: { ghostId },
+            where: { ghostId }
           });
-
+          
           if (existingPost) {
             console.log(`⏭️  Skipping existing post: ${title}`);
             skippedCount++;
@@ -373,83 +333,34 @@ async function syncGhostPostsLocally(
           }
         }
 
-        // Idempotent write: update if exists, otherwise create. On unique conflict, retry update.
-        let dbPost;
-        try {
-          dbPost = await prisma.post.update({
-            where: { ghostId },
-            data: {
-              title,
-              content,
-              excerpt,
-              featureImage,
-              slug,
-              status: 'published',
-              publishedAt,
-              ghostSlug: ghostSlug || undefined,
-              ghostUrl: ghostUrl || undefined,
-            },
-          });
-        } catch (err: any) {
-          if (err?.code === 'P2025') {
-            // Not found, create new
-            try {
-              dbPost = await prisma.post.create({
-                data: {
-                  title,
-                  content,
-                  excerpt,
-                  featureImage,
-                  slug,
-                  status: 'published',
-                  publishedAt,
-                  ghostId,
-                  ghostSlug: ghostSlug || undefined,
-                  ghostUrl: ghostUrl || undefined,
-                  userId: userId,
-                },
-              });
-            } catch (createErr: any) {
-              if (createErr?.code === 'P2002') {
-                // Unique conflict on ghostId - another process created it; perform update
-                dbPost = await prisma.post.update({
-                  where: { ghostId },
-                  data: {
-                    title,
-                    content,
-                    excerpt,
-                    featureImage,
-                    slug,
-                    status: 'published',
-                    publishedAt,
-                    ghostSlug: ghostSlug || undefined,
-                    ghostUrl: ghostUrl || undefined,
-                  },
-                });
-              } else {
-                throw createErr;
-              }
-            }
-          } else if (err?.code === 'P2002') {
-            // Unique constraint hit during update path - fallback to update again
-            dbPost = await prisma.post.update({
-              where: { ghostId },
-              data: {
-                title,
-                content,
-                excerpt,
-                featureImage,
-                slug,
-                status: 'published',
-                publishedAt,
-                ghostSlug: ghostSlug || undefined,
-                ghostUrl: ghostUrl || undefined,
-              },
-            });
-          } else {
-            throw err;
+        // Upsert post in database
+        const dbPost = await prisma.post.upsert({
+          where: { ghostId },
+          update: {
+            title,
+            content,
+            excerpt,
+            featureImage,
+            slug,
+            status: 'published',
+            publishedAt,
+            ghostSlug: ghostSlug || undefined,
+            ghostUrl: ghostUrl || undefined,
+          },
+          create: {
+            title,
+            content,
+            excerpt,
+            featureImage,
+            slug,
+            status: 'published',
+            publishedAt,
+            ghostId,
+            ghostSlug: ghostSlug || undefined,
+            ghostUrl: ghostUrl || undefined,
+            userId: userId,
           }
-        }
+        });
 
         // Create sync log for local storage
         await prisma.syncLog.create({
@@ -460,12 +371,13 @@ async function syncGhostPostsLocally(
             target: 'local',
             ghostId,
             postId: dbPost.id,
-            userId: userId,
-          },
+            userId: userId
+          }
         });
 
         console.log(`✅ Stored locally: ${title}`);
         syncedCount++;
+
       } catch (error) {
         console.error(`❌ Failed to process post ${post.id}:`, error);
         await prisma.syncLog.create({
@@ -476,8 +388,8 @@ async function syncGhostPostsLocally(
             target: 'local',
             ghostId: String(post.id),
             error: error instanceof Error ? error.message : 'Unknown error',
-            userId: userId,
-          },
+            userId: userId
+          }
         });
       }
     }
@@ -489,8 +401,9 @@ async function syncGhostPostsLocally(
     return {
       synced: syncedCount,
       skipped: skippedCount,
-      total: posts.length,
+      total: posts.length
     };
+
   } catch (error) {
     console.error('❌ Local sync failed:', error);
     throw error;
@@ -511,15 +424,15 @@ async function syncGhostToBluesky(
     console.log(`\n🔄 Starting sync for ${ghostUrl} (user: ${userId})...`);
 
     // 1. Authenticate with Bluesky
-    const agent = new BskyAgent({
-      service: process.env.ATPROTO_SERVICE || 'https://bsky.social',
+    const agent = new BskyAgent({ 
+      service: process.env.ATPROTO_SERVICE || 'https://bsky.social' 
     });
-
+    
     await agent.login({
       identifier: blueskyHandle,
       password: blueskyPassword,
     });
-
+    
     console.log(`🦋 Authenticated as ${blueskyHandle}`);
 
     // 2. Fetch Ghost posts using Admin API
@@ -533,23 +446,22 @@ async function syncGhostToBluesky(
       keyid: keyId,
       algorithm: 'HS256',
       expiresIn: '5m',
-      audience: `/admin/`,
+      audience: `/admin/`
     });
 
     const ghostApiUrl = `${ghostUrl}/ghost/api/admin/posts/`;
     const response = await axios.get(ghostApiUrl, {
       headers: {
-        Authorization: `Ghost ${token}`,
-        'Accept-Version': 'v6.4',
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v6.4'
       },
       params: {
         limit,
         filter: 'status:published',
         order: 'published_at DESC',
-        fields:
-          'id,title,slug,excerpt,custom_excerpt,html,plaintext,mobiledoc,lexical,feature_image,url,published_at',
-        formats: 'html,plaintext,mobiledoc', // Explicitly request all content formats
-      },
+        fields: 'id,title,slug,excerpt,custom_excerpt,html,plaintext,mobiledoc,lexical,feature_image,url,published_at',
+        formats: 'html,plaintext,mobiledoc'  // Explicitly request all content formats
+      }
     });
 
     const posts = response.data.posts || [];
@@ -565,7 +477,7 @@ async function syncGhostToBluesky(
         where: {
           ghostId: post.id,
           userId,
-        },
+        }
       });
 
       if (existing && existing.atprotoUri && !force) {
@@ -573,7 +485,7 @@ async function syncGhostToBluesky(
         skippedCount++;
         continue;
       }
-
+      
       // If force is true and post exists, we'll update it with full content
       if (existing && force) {
         console.log(`🔄 Force updating "${post.title}" with full content...`);
@@ -582,35 +494,29 @@ async function syncGhostToBluesky(
       // Create Bluesky post only if it doesn't already exist on Bluesky
       const excerpt = post.excerpt || post.custom_excerpt || '';
       const fullContent = post.html || post.plaintext || '';
-
+      
       // Log content status for debugging
-      console.log(
-        `📝 Processing "${post.title}": Content length = ${fullContent.length} chars`
-      );
-
+      console.log(`📝 Processing "${post.title}": Content length = ${fullContent.length} chars`);
+      
       // Strip HTML tags and get clean text
-      const cleanText = fullContent
-        .replace(/<[^>]*>/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
+      const cleanText = fullContent.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+      
       // Create a better formatted post with more content
       // Bluesky limit is 300 chars, so we maximize the content
       const urlText = `\n\n🔗 ${post.url}`;
       const titleText = `${post.title}\n\n`;
       const maxContentLength = 300 - titleText.length - urlText.length;
-
+      
       let contentToPost = excerpt || cleanText;
       if (contentToPost.length > maxContentLength) {
-        contentToPost =
-          contentToPost.substring(0, maxContentLength - 3) + '...';
+        contentToPost = contentToPost.substring(0, maxContentLength - 3) + '...';
       }
-
+      
       const blueskyText = `${titleText}${contentToPost}${urlText}`;
 
       try {
         let blueskyResult;
-
+        
         // Only post to Bluesky if not already posted
         if (!existing || !existing.atprotoUri) {
           // Use RichText to detect and create link facets for clickable links
@@ -624,10 +530,7 @@ async function syncGhostToBluesky(
           });
         } else {
           // Use existing Bluesky URI if already posted
-          blueskyResult = {
-            uri: existing.atprotoUri,
-            cid: existing.atprotoCid,
-          };
+          blueskyResult = { uri: existing.atprotoUri, cid: existing.atprotoCid };
         }
 
         // Save to database with full content
@@ -640,7 +543,7 @@ async function syncGhostToBluesky(
             atprotoUri: blueskyResult.uri,
             atprotoCid: blueskyResult.cid,
             status: 'published',
-            publishedAt: new Date(post.published_at),
+            publishedAt: new Date(post.published_at)
           },
           create: {
             title: post.title,
@@ -655,8 +558,8 @@ async function syncGhostToBluesky(
             atprotoUri: blueskyResult.uri,
             atprotoCid: blueskyResult.cid,
             publishedAt: new Date(post.published_at),
-            userId,
-          },
+            userId
+          }
         });
 
         // Log the sync
@@ -668,18 +571,18 @@ async function syncGhostToBluesky(
             target: 'atproto',
             ghostId: post.id,
             atprotoUri: blueskyResult.uri,
-            userId,
-          },
+            userId
+          }
         });
 
         console.log(`✅ Shared "${post.title}" to Bluesky`);
         syncedCount++;
 
         // Rate limiting - wait 2 seconds between posts
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (postError) {
         console.error(`❌ Failed to share "${post.title}":`, postError);
-
+        
         // Log the error
         await prisma.syncLog.create({
           data: {
@@ -688,24 +591,22 @@ async function syncGhostToBluesky(
             source: 'ghost',
             target: 'atproto',
             ghostId: post.id,
-            error:
-              postError instanceof Error ? postError.message : 'Unknown error',
-            userId,
-          },
+            error: postError instanceof Error ? postError.message : 'Unknown error',
+            userId
+          }
         });
       }
     }
 
-    console.log(
-      `✨ Sync complete for ${ghostUrl}: ${syncedCount} synced, ${skippedCount} skipped\n`
-    );
-
+    console.log(`✨ Sync complete for ${ghostUrl}: ${syncedCount} synced, ${skippedCount} skipped\n`);
+    
     return {
       success: true,
       syncedCount,
       skippedCount,
-      totalProcessed: posts.length,
+      totalProcessed: posts.length
     };
+
   } catch (error) {
     console.error(`❌ Sync error for ${ghostUrl}:`, error);
     throw error;
@@ -720,9 +621,7 @@ app.post(
     try {
       const secret = process.env.GHOST_WEBHOOK_SECRET;
       const signatureHeader = req.header('X-Ghost-Signature') || '';
-      const rawBody = Buffer.isBuffer(req.body)
-        ? req.body
-        : Buffer.from(req.body || '');
+      const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
       const userIdHeader = req.header('X-User-ID'); // Custom header to identify which user this webhook is for
 
       // Optional signature verification
@@ -754,16 +653,9 @@ app.post(
         return res.status(400).json({ ok: false });
       }
 
-      const evt = String(
-        payload?.post?.current?.event || payload?.event || 'unknown'
-      );
-      const ghostEntityId =
-        payload?.post?.current?.id || payload?.post?.id || null;
-      console.log('✅ Ghost webhook received', {
-        event: evt,
-        id: ghostEntityId,
-        userId: userIdHeader,
-      });
+      const evt = String(payload?.post?.current?.event || payload?.event || 'unknown');
+      const ghostEntityId = payload?.post?.current?.id || payload?.post?.id || null;
+      console.log('✅ Ghost webhook received', { event: evt, id: ghostEntityId, userId: userIdHeader });
 
       // Process webhook asynchronously
       (async () => {
@@ -787,24 +679,15 @@ app.post(
 
           // Check if auto-sync is enabled for this user
           if (!user.autoSync) {
-            console.log(
-              `Auto-sync disabled for user ${userId}, skipping webhook processing`
-            );
+            console.log(`Auto-sync disabled for user ${userId}, skipping webhook processing`);
             return;
           }
 
           // Check if user has valid Ghost configuration
-          if (
-            !user.ghostUrl ||
-            !user.ghostApiKey ||
-            user.ghostUrl === 'SKIPPED' ||
-            user.ghostApiKey === 'SKIPPED' ||
-            user.ghostUrl.trim() === '' ||
-            user.ghostApiKey.trim() === ''
-          ) {
-            console.log(
-              `User ${userId} has no valid Ghost configuration, skipping webhook processing`
-            );
+          if (!user.ghostUrl || !user.ghostApiKey || 
+              user.ghostUrl === 'SKIPPED' || user.ghostApiKey === 'SKIPPED' ||
+              user.ghostUrl.trim() === '' || user.ghostApiKey.trim() === '') {
+            console.log(`User ${userId} has no valid Ghost configuration, skipping webhook processing`);
             return;
           }
 
@@ -820,8 +703,7 @@ app.post(
             if (isPublished) {
               const title = postPayload.title || 'Untitled';
               const content = postPayload.html || postPayload.plaintext || '';
-              const excerpt =
-                postPayload.excerpt || postPayload.custom_excerpt || '';
+              const excerpt = postPayload.excerpt || postPayload.custom_excerpt || '';
               const featureImage = postPayload.feature_image || null;
               const slug = postPayload.slug || undefined;
               const ghostSlug = postPayload.slug || null;
@@ -835,10 +717,7 @@ app.post(
                   content,
                   excerpt,
                   featureImage,
-                  slug:
-                    slug ||
-                    (ghostSlug ? `${ghostSlug}` : undefined) ||
-                    `ghost-${ghostEntityId}`,
+                  slug: slug || (ghostSlug ? `${ghostSlug}` : undefined) || `ghost-${ghostEntityId}`,
                   status: 'published',
                   publishedAt: new Date(),
                   ghostSlug: ghostSlug || undefined,
@@ -849,16 +728,14 @@ app.post(
                   content,
                   excerpt,
                   featureImage,
-                  slug:
-                    slug ||
-                    (ghostSlug ? `${ghostSlug}` : `ghost-${ghostEntityId}`),
+                  slug: slug || (ghostSlug ? `${ghostSlug}` : `ghost-${ghostEntityId}`),
                   status: 'published',
                   publishedAt: new Date(),
                   ghostId: String(ghostEntityId),
                   ghostSlug: ghostSlug || undefined,
                   ghostUrl: ghostUrl || undefined,
                   userId: userId,
-                },
+                }
               });
 
               // Post to Bluesky (optional - only if user has connected their account)
@@ -867,12 +744,7 @@ app.post(
                 try {
                   // Use excerpt if available, otherwise use content
                   const contentToSend = excerpt || content;
-                  const result = await postToBluesky(
-                    agent,
-                    title,
-                    contentToSend,
-                    ghostUrl || undefined
-                  );
+                  const result = await postToBluesky(agent, title, contentToSend, ghostUrl || undefined);
 
                   // Update post with ATProto data
                   await prisma.post.update({
@@ -880,7 +752,7 @@ app.post(
                     data: {
                       atprotoUri: result.uri,
                       atprotoCid: result.cid,
-                    },
+                    }
                   });
 
                   await prisma.syncLog.create({
@@ -892,8 +764,8 @@ app.post(
                       ghostId: ghostEntityId,
                       atprotoUri: result.uri,
                       postId: post.id,
-                      userId: userId,
-                    },
+                      userId: userId
+                    }
                   });
 
                   console.log('✅ Posted to Bluesky:', result.uri);
@@ -907,17 +779,14 @@ app.post(
                       target: 'atproto',
                       ghostId: ghostEntityId,
                       postId: post.id,
-                      error:
-                        error instanceof Error
-                          ? error.message
-                          : 'Unknown error',
-                      userId: userId,
-                    },
+                      error: error instanceof Error ? error.message : 'Unknown error',
+                      userId: userId
+                    }
                   });
                 }
               } else {
                 console.log('📝 Post stored locally (Bluesky not connected)');
-
+                
                 // Create a sync log for local storage
                 await prisma.syncLog.create({
                   data: {
@@ -927,8 +796,8 @@ app.post(
                     target: 'local',
                     ghostId: ghostEntityId,
                     postId: post.id,
-                    userId: userId,
-                  },
+                    userId: userId
+                  }
                 });
               }
             }
@@ -949,10 +818,12 @@ app.post(
 // Generic JSON body parser with increased limit for image uploads
 app.use(express.json({ limit: '10mb' }));
 
+
 // Routes
 app.use('/api/atproto', atprotoRoutes);
 app.use('/api/wizard', wizardRoutes);
 app.use('/api/auth', oauthRoutes);
+
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Ghost ATProto Backend is running!' });
@@ -976,12 +847,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Check if user has a password (OAuth users might not have one)
     if (!user.password) {
-      return res
-        .status(401)
-        .json({
-          error:
-            'This account uses OAuth. Please sign in with Google or Bluesky.',
-        });
+      return res.status(401).json({ error: 'This account uses OAuth. Please sign in with Google or Bluesky.' });
     }
 
     // Verify password
@@ -991,15 +857,13 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Generate JWT token
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
-      expiresIn: '7d',
-    });
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
 
     // Set cookie
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
     res.json({
@@ -1009,9 +873,9 @@ app.post('/api/auth/login', async (req, res) => {
         name: user.name,
         blueskyHandle: user.blueskyHandle,
         ghostUrl: user.ghostUrl,
-        role: user.role,
+        role: user.role
       },
-      token,
+      token
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -1038,8 +902,8 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         ghostUrl: true,
         ghostApiKey: true,
         ghostContentApiKey: true,
-        createdAt: true,
-      },
+        createdAt: true
+      }
     });
 
     if (!user) {
@@ -1057,21 +921,15 @@ app.post('/api/auth/signup', async (req, res) => {
   try {
     console.log('[Signup] Raw request body:', req.body);
     console.log('[Signup] Content-Type:', req.get('content-type'));
-
-    const { email, name, password, role } = req.body as {
-      email?: string;
-      name?: string;
+    
+    const { email, name, password, role } = req.body as { 
+      email?: string; 
+      name?: string; 
       password?: string;
-      role?: 'USER' | 'AUTHOR' | 'ADMIN';
+      role?: 'USER' | 'AUTHOR' | 'ADMIN' 
     };
 
-    console.log('[Signup] Parsed body:', {
-      email,
-      name,
-      role,
-      hasPassword: !!password,
-      passwordLength: password?.length,
-    });
+    console.log('[Signup] Parsed body:', { email, name, role, hasPassword: !!password, passwordLength: password?.length });
 
     if (!email || !password) {
       console.log('[Signup] Validation failed: missing email or password');
@@ -1080,16 +938,14 @@ app.post('/api/auth/signup', async (req, res) => {
 
     if (password.length < 6) {
       console.log('[Signup] Validation failed: password too short');
-      return res
-        .status(400)
-        .json({ error: 'Password must be at least 6 characters' });
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
     // Ensure email unique
     console.log('[Signup] Checking if email exists...');
-    const existing = await prisma.user.findUnique({
+    const existing = await prisma.user.findUnique({ 
       where: { email },
-      select: { id: true, email: true },
+      select: { id: true, email: true }
     });
     if (existing) {
       console.log('[Signup] Email already exists:', existing.email);
@@ -1101,9 +957,7 @@ app.post('/api/auth/signup', async (req, res) => {
     const normalizedRole = (role || 'USER').toUpperCase();
     if (!['USER', 'AUTHOR'].includes(normalizedRole)) {
       console.log('[Signup] Validation failed: invalid role', normalizedRole);
-      return res
-        .status(400)
-        .json({ error: 'Invalid role. Use USER or AUTHOR.' });
+      return res.status(400).json({ error: 'Invalid role. Use USER or AUTHOR.' });
     }
     console.log('[Signup] Role validated:', normalizedRole);
 
@@ -1130,20 +984,18 @@ app.post('/api/auth/signup', async (req, res) => {
         ghostUrl: true,
         createdAt: true,
         updatedAt: true,
-      },
+      }
     });
     console.log('[Signup] User created successfully:', user.id);
 
     // Generate JWT token
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
-      expiresIn: '7d',
-    });
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
 
     // Set cookie
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
     res.json({
@@ -1153,37 +1005,35 @@ app.post('/api/auth/signup', async (req, res) => {
         name: user.name,
         blueskyHandle: user.blueskyHandle,
         ghostUrl: user.ghostUrl,
-        role: user.role,
+        role: user.role
       },
-      token,
+      token
     });
   } catch (error: any) {
     console.error('[Signup] Error details:', {
       code: error.code,
       message: error.message,
       meta: error.meta,
-      stack: error.stack,
+      stack: error.stack
     });
-
+    
     // Provide more detailed error message
     if (error.code === 'P2002') {
-      console.log(
-        '[Signup] Prisma unique constraint violation - email already exists'
-      );
+      console.log('[Signup] Prisma unique constraint violation - email already exists');
       return res.status(400).json({ error: 'Email already registered' });
     }
     if (error.code === 'P2022') {
       console.log('[Signup] Prisma column not found error');
-      return res.status(500).json({
+      return res.status(500).json({ 
         error: 'Database schema mismatch. Please run migrations.',
-        details: error.meta?.column || 'Unknown column',
+        details: error.meta?.column || 'Unknown column'
       });
     }
     console.log('[Signup] Unknown error, returning 500');
-    res.status(500).json({
+    res.status(500).json({ 
       error: 'Signup failed',
       message: error.message || 'Unknown error',
-      code: error.code || 'UNKNOWN',
+      code: error.code || 'UNKNOWN'
     });
   }
 });
@@ -1191,26 +1041,17 @@ app.post('/api/auth/signup', async (req, res) => {
 app.put('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const {
-      name,
-      blueskyHandle,
-      blueskyPassword,
-      ghostUrl,
-      ghostApiKey,
-      ghostContentApiKey,
-    } = req.body;
+    const { name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey, ghostContentApiKey } = req.body;
 
     const user = await prisma.user.update({
       where: { id: userId },
       data: {
         name: name !== undefined ? name : undefined,
         blueskyHandle: blueskyHandle !== undefined ? blueskyHandle : undefined,
-        blueskyPassword:
-          blueskyPassword !== undefined ? blueskyPassword : undefined,
+        blueskyPassword: blueskyPassword !== undefined ? blueskyPassword : undefined,
         ghostUrl: ghostUrl !== undefined ? ghostUrl : undefined,
         ghostApiKey: ghostApiKey !== undefined ? ghostApiKey : undefined,
-        ghostContentApiKey:
-          ghostContentApiKey !== undefined ? ghostContentApiKey : undefined,
+        ghostContentApiKey: ghostContentApiKey !== undefined ? ghostContentApiKey : undefined,
       },
       select: {
         id: true,
@@ -1221,54 +1062,11 @@ app.put('/api/auth/me', authenticateToken, async (req, res) => {
         ghostUrl: true,
         ghostApiKey: true,
         ghostContentApiKey: true,
-        createdAt: true,
-      },
+        createdAt: true
+      }
     });
 
     res.json(user);
-
-    // Fire-and-forget: if Ghost credentials are present, validate, register webhook, and sync locally
-    (async () => {
-      try {
-        const gUrl = (ghostUrl ?? user.ghostUrl)?.toString().trim();
-        const gKey = (ghostApiKey ?? user.ghostApiKey)?.toString().trim();
-        if (gUrl && gKey && gUrl !== 'SKIPPED' && gKey !== 'SKIPPED') {
-          const isValid = await validateGhostConnection(gUrl, gKey);
-          if (!isValid) {
-            console.warn(
-              `[Settings Auto-Sync] Invalid Ghost config for user ${userId}, skipping auto-sync.`
-            );
-            return;
-          }
-          // Try to register webhook (best-effort)
-          try {
-            await registerGhostWebhook(gUrl, gKey, userId);
-          } catch (e) {
-            console.warn(
-              `[Settings Auto-Sync] Webhook registration failed for user ${userId}:`,
-              e
-            );
-          }
-          // Sync posts locally (do not block response)
-          try {
-            await syncGhostPostsLocally(userId, gUrl, gKey, 50, false);
-            console.log(
-              `[Settings Auto-Sync] Local Ghost sync completed for user ${userId}`
-            );
-          } catch (e) {
-            console.error(
-              `[Settings Auto-Sync] Local Ghost sync failed for user ${userId}:`,
-              e
-            );
-          }
-        }
-      } catch (e) {
-        console.error(
-          `[Settings Auto-Sync] Unexpected error for user ${userId}:`,
-          e
-        );
-      }
-    })();
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user' });
@@ -1282,7 +1080,7 @@ app.get('/api/auth/posts', authenticateToken, async (req, res) => {
     const posts = await prisma.post.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 50
     });
     res.json(posts);
   } catch (error) {
@@ -1297,7 +1095,7 @@ app.get('/api/auth/logs', authenticateToken, async (req, res) => {
     const logs = await prisma.syncLog.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 100
     });
     res.json(logs);
   } catch (error) {
@@ -1309,42 +1107,42 @@ app.get('/api/auth/logs', authenticateToken, async (req, res) => {
 app.get('/api/auth/profile/stats', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
-
+    
     // Get total posts synced
     const totalPosts = await prisma.post.count({
-      where: { userId, atprotoUri: { not: null } },
+      where: { userId, atprotoUri: { not: null } }
     });
-
+    
     // Get successful syncs
     const successfulSyncs = await prisma.syncLog.count({
-      where: { userId, status: 'success' },
+      where: { userId, status: 'success' }
     });
-
+    
     // Get failed syncs
     const failedSyncs = await prisma.syncLog.count({
-      where: { userId, status: 'error' },
+      where: { userId, status: 'error' }
     });
-
+    
     // Get recent posts
     const recentPosts = await prisma.post.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      take: 10,
+      take: 10
     });
-
+    
     // Get recent logs
     const recentLogs = await prisma.syncLog.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      take: 20,
+      take: 20
     });
-
+    
     res.json({
       totalPosts,
       successfulSyncs,
       failedSyncs,
       recentPosts,
-      recentLogs,
+      recentLogs
     });
   } catch (error) {
     console.error('Profile stats error:', error);
@@ -1367,8 +1165,8 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
         ghostContentApiKey: true,
         blueskyHandle: true,
         blueskyPassword: true,
-        autoSync: true,
-      },
+        autoSync: true
+      }
     });
 
     if (!user) {
@@ -1376,17 +1174,11 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
     }
 
     // Validate Ghost configuration
-    if (
-      !user.ghostUrl ||
-      !user.ghostApiKey ||
-      user.ghostUrl === 'SKIPPED' ||
-      user.ghostApiKey === 'SKIPPED' ||
-      user.ghostUrl.trim() === '' ||
-      user.ghostApiKey.trim() === ''
-    ) {
-      return res.status(400).json({
-        error:
-          'Ghost Admin API key and URL are required for syncing. Please configure them in your settings.',
+    if (!user.ghostUrl || !user.ghostApiKey || 
+        user.ghostUrl === 'SKIPPED' || user.ghostApiKey === 'SKIPPED' ||
+        user.ghostUrl.trim() === '' || user.ghostApiKey.trim() === '') {
+      return res.status(400).json({ 
+        error: 'Ghost Admin API key and URL are required for syncing. Please configure them in your settings.' 
       });
     }
 
@@ -1394,14 +1186,10 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
     // Posts will be stored locally regardless of Bluesky connection
 
     // Validate Ghost connection before attempting sync
-    const isValidConnection = await validateGhostConnection(
-      user.ghostUrl,
-      user.ghostApiKey
-    );
+    const isValidConnection = await validateGhostConnection(user.ghostUrl, user.ghostApiKey);
     if (!isValidConnection) {
-      return res.status(400).json({
-        error:
-          'Invalid Ghost URL or API key. Please check your Ghost configuration.',
+      return res.status(400).json({ 
+        error: 'Invalid Ghost URL or API key. Please check your Ghost configuration.' 
       });
     }
 
@@ -1415,16 +1203,11 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
     );
 
     let blueskyResult = null;
-
+    
     // If user has Bluesky credentials, also sync to Bluesky
-    if (
-      user.blueskyHandle &&
-      user.blueskyPassword &&
-      user.blueskyHandle !== 'SKIPPED' &&
-      user.blueskyPassword !== 'SKIPPED' &&
-      user.blueskyHandle.trim() !== '' &&
-      user.blueskyPassword.trim() !== ''
-    ) {
+    if (user.blueskyHandle && user.blueskyPassword &&
+        user.blueskyHandle !== 'SKIPPED' && user.blueskyPassword !== 'SKIPPED' &&
+        user.blueskyHandle.trim() !== '' && user.blueskyPassword.trim() !== '') {
       try {
         console.log('🦋 Also syncing to Bluesky...');
         blueskyResult = await syncGhostToBluesky(
@@ -1438,9 +1221,7 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
         );
       } catch (error) {
         console.error('Bluesky sync failed, but local sync succeeded:', error);
-        blueskyResult = {
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
+        blueskyResult = { error: error instanceof Error ? error.message : 'Unknown error' };
       }
     } else {
       console.log('📝 Bluesky not configured, skipping Bluesky sync');
@@ -1455,13 +1236,14 @@ app.post('/api/auth/sync', authenticateToken, async (req, res) => {
         localSkipped: localResult.skipped,
         blueskySynced: blueskyResult?.syncedCount || 0,
         blueskySkipped: blueskyResult?.skippedCount || 0,
-        blueskyError: (blueskyResult as any)?.error || null,
-      },
+        blueskyError: (blueskyResult as any)?.error || null
+      }
     });
+
   } catch (error) {
     console.error('Manual sync error:', error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Sync failed',
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Sync failed' 
     });
   }
 });
@@ -1484,10 +1266,9 @@ app.get('/api/oauth/authorize', async (req, res) => {
     // Full OAuth implementation requires proper state management
     res.json({
       message: 'OAuth flow initialization',
-      nextSteps:
-        'Full OAuth implementation in progress. Use app password for now.',
+      nextSteps: 'Full OAuth implementation in progress. Use app password for now.',
       handle,
-      userId,
+      userId
     });
   } catch (error) {
     res.status(500).json({ error: 'OAuth initialization failed' });
@@ -1512,7 +1293,7 @@ app.get('/api/users', async (req, res) => {
         blueskyHandle: true,
         ghostUrl: true,
         createdAt: true,
-      },
+      }
     });
     res.json(users);
   } catch (error) {
@@ -1522,24 +1303,14 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
-    const {
-      email,
-      name,
-      password,
-      blueskyHandle,
-      blueskyPassword,
-      ghostUrl,
-      ghostApiKey,
-    } = req.body;
+    const { email, name, password, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
     if (password.length < 6) {
-      return res
-        .status(400)
-        .json({ error: 'Password must be at least 6 characters' });
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
     // Hash password
@@ -1554,7 +1325,7 @@ app.post('/api/users', async (req, res) => {
         blueskyPassword: blueskyPassword || null,
         ghostUrl: ghostUrl || null,
         ghostApiKey: ghostApiKey || null,
-      },
+      }
     });
 
     res.json(user);
@@ -1566,19 +1337,17 @@ app.post('/api/users', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } =
-      req.body;
+    const { name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     const user = await prisma.user.update({
       where: { id },
       data: {
         name: name !== undefined ? name : undefined,
         blueskyHandle: blueskyHandle !== undefined ? blueskyHandle : undefined,
-        blueskyPassword:
-          blueskyPassword !== undefined ? blueskyPassword : undefined,
+        blueskyPassword: blueskyPassword !== undefined ? blueskyPassword : undefined,
         ghostUrl: ghostUrl !== undefined ? ghostUrl : undefined,
         ghostApiKey: ghostApiKey !== undefined ? ghostApiKey : undefined,
-      },
+      }
     });
 
     res.json(user);
@@ -1593,8 +1362,8 @@ app.get('/api/users/:id', async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id },
       include: {
-        oauthSessions: true,
-      },
+        oauthSessions: true
+      }
     });
 
     if (!user) {
@@ -1618,9 +1387,9 @@ app.get('/api/posts', async (req, res) => {
             id: true,
             email: true,
             name: true,
-          },
-        },
-      },
+          }
+        }
+      }
     });
     res.json(posts);
   } catch (error) {
@@ -1641,9 +1410,9 @@ app.get('/api/posts/:id', async (req, res) => {
             email: true,
             name: true,
             blueskyHandle: true,
-          },
-        },
-      },
+          }
+        }
+      }
     });
 
     if (!post) {
@@ -1661,14 +1430,14 @@ app.get('/api/posts/:id', async (req, res) => {
 // Civic Events (Mobilize API Proxy)
 app.get('/api/civic-events', async (req, res) => {
   try {
-    const {
-      cursor,
-      zipcode,
-      organization_id,
-      event_type,
+    const { 
+      cursor, 
+      zipcode, 
+      organization_id, 
+      event_type, 
       event_types,
-      state,
-      timeslot_start_after,
+      state, 
+      timeslot_start_after, 
       timeslot_start_before,
       timeslot_start,
       timeslot_end,
@@ -1680,9 +1449,9 @@ app.get('/api/civic-events', async (req, res) => {
       high_priority_only,
       tag_id,
       event_campaign_id,
-      approval_status,
+      approval_status
     } = req.query;
-
+    
     // Build query params - handle cursor properly
     const params = new URLSearchParams();
     if (cursor) {
@@ -1703,50 +1472,37 @@ app.get('/api/civic-events', async (req, res) => {
         params.append('cursor', decodedCursor);
       }
     }
-
+    
     // Basic filters
     if (zipcode) params.append('zipcode', zipcode as string);
-    if (organization_id)
-      params.append('organization_id', organization_id as string);
+    if (organization_id) params.append('organization_id', organization_id as string);
     if (state) params.append('state', state as string);
     if (updated_since) params.append('updated_since', updated_since as string);
     if (visibility) params.append('visibility', visibility as string);
     if (max_dist) params.append('max_dist', max_dist as string);
-    if (event_campaign_id)
-      params.append('event_campaign_id', event_campaign_id as string);
-
+    if (event_campaign_id) params.append('event_campaign_id', event_campaign_id as string);
+    
     // Event type filters (support both single and multiple)
     if (event_type) params.append('event_type', event_type as string);
     if (event_types) {
       // Handle multiple event types
       const types = Array.isArray(event_types) ? event_types : [event_types];
-      types.forEach((type) => params.append('event_types', type as string));
+      types.forEach(type => params.append('event_types', type as string));
     }
-
+    
     // Boolean filters
-    if (is_virtual !== undefined)
-      params.append('is_virtual', is_virtual as string);
-    if (exclude_full !== undefined)
-      params.append('exclude_full', exclude_full as string);
-    if (high_priority_only !== undefined)
-      params.append('high_priority_only', high_priority_only as string);
-
+    if (is_virtual !== undefined) params.append('is_virtual', is_virtual as string);
+    if (exclude_full !== undefined) params.append('exclude_full', exclude_full as string);
+    if (high_priority_only !== undefined) params.append('high_priority_only', high_priority_only as string);
+    
     // Date/time filters
-    if (timeslot_start_after)
-      params.append('timeslot_start_after', timeslot_start_after as string);
-    if (timeslot_start_before)
-      params.append('timeslot_start_before', timeslot_start_before as string);
-    if (timeslot_start)
-      params.append('timeslot_start', timeslot_start as string);
+    if (timeslot_start_after) params.append('timeslot_start_after', timeslot_start_after as string);
+    if (timeslot_start_before) params.append('timeslot_start_before', timeslot_start_before as string);
+    if (timeslot_start) params.append('timeslot_start', timeslot_start as string);
     if (timeslot_end) params.append('timeslot_end', timeslot_end as string);
 
     // Default: only show upcoming events if no date filters provided
-    if (
-      !timeslot_start_after &&
-      !timeslot_start_before &&
-      !timeslot_start &&
-      !timeslot_end
-    ) {
+    if (!timeslot_start_after && !timeslot_start_before && !timeslot_start && !timeslot_end) {
       const now = new Date().toISOString();
       params.append('timeslot_start', `gte_${now}`);
     }
@@ -1754,25 +1510,21 @@ app.get('/api/civic-events', async (req, res) => {
     // Tag filters (support multiple)
     if (tag_id) {
       const tags = Array.isArray(tag_id) ? tag_id : [tag_id];
-      tags.forEach((tag) => params.append('tag_id', tag as string));
+      tags.forEach(tag => params.append('tag_id', tag as string));
     }
-
+    
     // Approval status filters (support multiple)
     if (approval_status) {
-      const statuses = Array.isArray(approval_status)
-        ? approval_status
-        : [approval_status];
-      statuses.forEach((status) =>
-        params.append('approval_status', status as string)
-      );
+      const statuses = Array.isArray(approval_status) ? approval_status : [approval_status];
+      statuses.forEach(status => params.append('approval_status', status as string));
     }
-
+    
     const queryString = params.toString();
     const baseUrl = 'https://api.mobilize.us/v1/events';
     const url = queryString ? `${baseUrl}?${queryString}` : baseUrl;
-
+    
     console.log('Making request to:', url); // Debug log
-
+    
     const response = await axios.get(url);
     res.json(response.data);
   } catch (error) {
@@ -1805,14 +1557,14 @@ app.get('/api/public/civic-actions', async (req, res) => {
     // Build where clause
     const whereClause: any = {
       status: 'approved',
-      deletedAt: null, // Exclude soft-deleted events
+      deletedAt: null // Exclude soft-deleted events
     };
 
     // Filter out expired events (unless explicitly requested)
     if (includeExpired !== 'true') {
       whereClause.OR = [
-        { eventDate: { gte: new Date() } }, // Future events
-        { eventDate: null }, // Events without date
+        { eventDate: { gte: new Date() } },  // Future events
+        { eventDate: null }                   // Events without date
       ];
     }
 
@@ -1822,13 +1574,16 @@ app.get('/api/public/civic-actions', async (req, res) => {
       const searchTerms = {
         OR: [
           { title: { search: q.trim() } },
-          { description: { search: q.trim() } },
-        ],
+          { description: { search: q.trim() } }
+        ]
       };
 
       // Combine with date filter if it exists
       if (whereClause.OR.length > 0 && includeExpired !== 'true') {
-        whereClause.AND = [{ OR: whereClause.OR }, searchTerms];
+        whereClause.AND = [
+          { OR: whereClause.OR },
+          searchTerms
+        ];
         delete whereClause.OR;
       } else {
         whereClause.AND = [searchTerms];
@@ -1841,7 +1596,7 @@ app.get('/api/public/civic-actions', async (req, res) => {
         whereClause.AND = [];
       }
       whereClause.AND.push({
-        state: { equals: state.trim().toUpperCase() },
+        state: { equals: state.trim().toUpperCase() }
       });
     }
 
@@ -1858,12 +1613,12 @@ app.get('/api/public/civic-actions', async (req, res) => {
       if (isZipcode) {
         // Exact match on zipcode field (indexed)
         whereClause.AND.push({
-          zipcode: { startsWith: loc.substring(0, 5) },
+          zipcode: { startsWith: loc.substring(0, 5) }
         });
       } else {
         // Partial match on location string
         whereClause.AND.push({
-          location: { contains: loc },
+          location: { contains: loc }
         });
       }
     }
@@ -1876,15 +1631,15 @@ app.get('/api/public/civic-actions', async (req, res) => {
           select: {
             id: true,
             name: true,
-          },
-        },
+          }
+        }
       },
       orderBy: [
         { isPinned: 'desc' },
-        { priority: 'desc' }, // Higher priority first
-        { eventDate: 'asc' }, // Soonest events first
-        { createdAt: 'desc' },
-      ],
+        { priority: 'desc' },    // Higher priority first
+        { eventDate: 'asc' },    // Soonest events first
+        { createdAt: 'desc' }
+      ]
     });
 
     res.json(civicActions);
@@ -1906,9 +1661,9 @@ app.get('/api/public/civic-actions/:id', async (req, res) => {
           select: {
             id: true,
             name: true,
-          },
-        },
-      },
+          }
+        }
+      }
     });
 
     if (!civicAction) {
@@ -1931,13 +1686,10 @@ app.get('/api/public/civic-actions/:id', async (req, res) => {
 app.post('/api/civic-actions', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
-    const { title, description, eventType, location, eventDate, imageUrl } =
-      req.body;
+    const { title, description, eventType, location, eventDate, imageUrl } = req.body;
 
     if (!title || !description) {
-      return res
-        .status(400)
-        .json({ error: 'Title and description are required' });
+      return res.status(400).json({ error: 'Title and description are required' });
     }
 
     const civicAction = await prisma.civicAction.create({
@@ -1957,21 +1709,21 @@ app.post('/api/civic-actions', authenticateToken, async (req, res) => {
             id: true,
             email: true,
             name: true,
-          },
-        },
-      },
+          }
+        }
+      }
     });
 
     res.json(civicAction);
   } catch (error) {
     console.error('Create civic action error:', error);
-    console.error('Request body:', {
-      title: req.body?.title,
-      description: req.body?.description?.substring(0, 100) + '...',
+    console.error('Request body:', { 
+      title: req.body?.title, 
+      description: req.body?.description?.substring(0, 100) + '...', 
       eventType: req.body?.eventType,
       location: req.body?.location,
       eventDate: req.body?.eventDate,
-      imageUrlLength: req.body?.imageUrl?.length || 0,
+      imageUrlLength: req.body?.imageUrl?.length || 0
     });
     res.status(500).json({ error: 'Failed to create civic action' });
   }
@@ -1988,7 +1740,7 @@ app.get('/api/civic-actions', authenticateToken, async (req, res) => {
     }
 
     let whereClause = {};
-
+    
     // Admins see all civic actions
     if (user.role === 'ADMIN') {
       // Optionally filter by status
@@ -2009,21 +1761,21 @@ app.get('/api/civic-actions', authenticateToken, async (req, res) => {
             id: true,
             email: true,
             name: true,
-          },
+          }
         },
         reviewer: {
           select: {
             id: true,
             email: true,
             name: true,
-          },
-        },
+          }
+        }
       },
       orderBy: [
         { isPinned: 'desc' },
-        { priority: 'desc' }, // Higher priority first
-        { createdAt: 'desc' },
-      ],
+        { priority: 'desc' },    // Higher priority first
+        { createdAt: 'desc' }
+      ]
     });
 
     res.json(civicActions);
@@ -2042,13 +1794,13 @@ app.get('/api/civic-actions/mine', authenticateToken, async (req, res) => {
       where: { userId },
       include: {
         reviewer: {
-          select: { id: true, email: true, name: true },
-        },
+          select: { id: true, email: true, name: true }
+        }
       },
       orderBy: [
         { status: 'asc' }, // pending first (alphabetically 'approved'>'pending'>'rejected'; to ensure pending first, we could map, but simple asc groups)
-        { createdAt: 'desc' },
-      ],
+        { createdAt: 'desc' }
+      ]
     });
 
     res.json(civicActions);
@@ -2077,16 +1829,16 @@ app.get('/api/civic-actions/:id', authenticateToken, async (req, res) => {
             id: true,
             email: true,
             name: true,
-          },
+          }
         },
         reviewer: {
           select: {
             id: true,
             email: true,
             name: true,
-          },
-        },
-      },
+          }
+        }
+      }
     });
 
     if (!civicAction) {
@@ -2097,11 +1849,7 @@ app.get('/api/civic-actions/:id', authenticateToken, async (req, res) => {
     // 1. User is the owner
     // 2. User is an admin
     // 3. Action is approved (visible to everyone)
-    if (
-      civicAction.userId !== userId &&
-      user.role !== 'ADMIN' &&
-      civicAction.status !== 'approved'
-    ) {
+    if (civicAction.userId !== userId && user.role !== 'ADMIN' && civicAction.status !== 'approved') {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -2117,8 +1865,7 @@ app.put('/api/civic-actions/:id', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const { id } = req.params;
-    const { title, description, eventType, location, eventDate, imageUrl } =
-      req.body;
+    const { title, description, eventType, location, eventDate, imageUrl } = req.body;
 
     // Fetch and ensure ownership and pending status
     const existing = await prisma.civicAction.findUnique({ where: { id } });
@@ -2129,9 +1876,7 @@ app.put('/api/civic-actions/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Not allowed' });
     }
     if (existing.status !== 'pending') {
-      return res
-        .status(400)
-        .json({ error: 'Only pending actions can be edited' });
+      return res.status(400).json({ error: 'Only pending actions can be edited' });
     }
 
     const updated = await prisma.civicAction.update({
@@ -2143,7 +1888,7 @@ app.put('/api/civic-actions/:id', authenticateToken, async (req, res) => {
         location: location ?? undefined,
         eventDate: eventDate ? new Date(eventDate) : undefined,
         imageUrl: imageUrl ?? undefined,
-      },
+      }
     });
 
     res.json(updated);
@@ -2154,284 +1899,170 @@ app.put('/api/civic-actions/:id', authenticateToken, async (req, res) => {
 });
 
 // Approve civic action (admin only)
-app.post(
-  '/api/civic-actions/:id/approve',
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const { id } = req.params;
-      const { pinned } = req.body;
-
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user || user.role !== 'ADMIN') {
-        return res.status(403).json({ error: 'Admin access required' });
-      }
-
-      const civicAction = await prisma.civicAction.update({
-        where: { id },
-        data: {
-          status: 'approved',
-          reviewedBy: userId,
-          reviewedAt: new Date(),
-          isPinned: pinned || false,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-            },
-          },
-        },
-      });
-
-      res.json(civicAction);
-    } catch (error) {
-      console.error('Approve civic action error:', error);
-      res.status(500).json({ error: 'Failed to approve civic action' });
-    }
-  }
-);
-
-// Reject civic action (admin only)
-app.post(
-  '/api/civic-actions/:id/reject',
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const { id } = req.params;
-      const { reason } = req.body;
-
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user || user.role !== 'ADMIN') {
-        return res.status(403).json({ error: 'Admin access required' });
-      }
-
-      const civicAction = await prisma.civicAction.update({
-        where: { id },
-        data: {
-          status: 'rejected',
-          reviewedBy: userId,
-          reviewedAt: new Date(),
-          rejectionReason: reason,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-            },
-          },
-        },
-      });
-
-      res.json(civicAction);
-    } catch (error) {
-      console.error('Reject civic action error:', error);
-      res.status(500).json({ error: 'Failed to reject civic action' });
-    }
-  }
-);
-
-// Toggle pin status (admin only)
-app.post(
-  '/api/civic-actions/:id/toggle-pin',
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const { id } = req.params;
-
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user || user.role !== 'ADMIN') {
-        return res.status(403).json({ error: 'Admin access required' });
-      }
-
-      const currentAction = await prisma.civicAction.findUnique({
-        where: { id },
-      });
-      if (!currentAction) {
-        return res.status(404).json({ error: 'Civic action not found' });
-      }
-
-      const civicAction = await prisma.civicAction.update({
-        where: { id },
-        data: {
-          isPinned: !currentAction.isPinned,
-        },
-      });
-
-      res.json(civicAction);
-    } catch (error) {
-      console.error('Toggle pin error:', error);
-      res.status(500).json({ error: 'Failed to toggle pin status' });
-    }
-  }
-);
-
-// Recommend civic action (admin only)
-app.post(
-  '/api/civic-actions/:id/recommend',
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const { id } = req.params;
-
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user || user.role !== 'ADMIN') {
-        return res.status(403).json({ error: 'Admin access required' });
-      }
-
-      const civicAction = await prisma.civicAction.update({
-        where: { id },
-        data: {
-          recommendedBy: userId,
-        },
-        include: {
-          recommender: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      res.json(civicAction);
-    } catch (error) {
-      console.error('Recommend civic action error:', error);
-      res.status(500).json({ error: 'Failed to recommend civic action' });
-    }
-  }
-);
-
-// Set priority (admin only)
-app.post(
-  '/api/civic-actions/:id/set-priority',
-  authenticateToken,
-  async (req, res) => {
-    try {
-      const userId = (req as any).userId;
-      const { id } = req.params;
-      const { priority } = req.body;
-
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user || user.role !== 'ADMIN') {
-        return res.status(403).json({ error: 'Admin access required' });
-      }
-
-      if (typeof priority !== 'number' || priority < 0 || priority > 100) {
-        return res
-          .status(400)
-          .json({ error: 'Priority must be a number between 0 and 100' });
-      }
-
-      const civicAction = await prisma.civicAction.update({
-        where: { id },
-        data: { priority },
-      });
-
-      res.json(civicAction);
-    } catch (error) {
-      console.error('Set priority error:', error);
-      res.status(500).json({ error: 'Failed to set priority' });
-    }
-  }
-);
-
-// Track embed - when an author embeds a civic action in an article (public endpoint)
-app.post('/api/civic-actions/:id/track-embed', async (req, res) => {
+app.post('/api/civic-actions/:id/approve', authenticateToken, async (req, res) => {
   try {
+    const userId = (req as any).userId;
     const { id } = req.params;
-    const { authorId } = req.body; // Optional: track which author embedded it
+    const { pinned } = req.body;
 
-    // Verify the civic action exists
-    const civicAction = await prisma.civicAction.findUnique({
-      where: { id },
-    });
-
-    if (!civicAction) {
-      return res.status(404).json({ error: 'Civic action not found' });
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
     }
 
-    // Increment embed count
-    const updated = await prisma.civicAction.update({
+    const civicAction = await prisma.civicAction.update({
       where: { id },
       data: {
-        embedCount: {
-          increment: 1,
-        },
+        status: 'approved',
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+        isPinned: pinned || false,
       },
-      select: {
-        id: true,
-        title: true,
-        embedCount: true,
-        viewCount: true,
-      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          }
+        }
+      }
     });
 
-    // Log the embed event (optional: could store in a separate table for analytics)
-    if (authorId) {
-      console.log(`Civic action ${id} embedded by author ${authorId}`);
-    } else {
-      console.log(`Civic action ${id} embedded (anonymous)`);
-    }
-
-    res.json({
-      success: true,
-      embedCount: updated.embedCount,
-      viewCount: updated.viewCount,
-    });
+    res.json(civicAction);
   } catch (error) {
-    console.error('Track embed error:', error);
-    res.status(500).json({ error: 'Failed to track embed' });
+    console.error('Approve civic action error:', error);
+    res.status(500).json({ error: 'Failed to approve civic action' });
   }
 });
 
-// Track view - when a user views a civic action (public endpoint)
-app.post('/api/civic-actions/:id/track-view', async (req, res) => {
+// Reject civic action (admin only)
+app.post('/api/civic-actions/:id/reject', authenticateToken, async (req, res) => {
   try {
+    const userId = (req as any).userId;
     const { id } = req.params;
+    const { reason } = req.body;
 
-    // Verify the civic action exists
-    const civicAction = await prisma.civicAction.findUnique({
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const civicAction = await prisma.civicAction.update({
       where: { id },
+      data: {
+        status: 'rejected',
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+        rejectionReason: reason,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          }
+        }
+      }
     });
 
-    if (!civicAction) {
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Reject civic action error:', error);
+    res.status(500).json({ error: 'Failed to reject civic action' });
+  }
+});
+
+// Toggle pin status (admin only)
+app.post('/api/civic-actions/:id/toggle-pin', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const currentAction = await prisma.civicAction.findUnique({ where: { id } });
+    if (!currentAction) {
       return res.status(404).json({ error: 'Civic action not found' });
     }
 
-    // Increment view count
-    const updated = await prisma.civicAction.update({
+    const civicAction = await prisma.civicAction.update({
       where: { id },
       data: {
-        viewCount: {
-          increment: 1,
-        },
-      },
-      select: {
-        id: true,
-        title: true,
-        embedCount: true,
-        viewCount: true,
-      },
+        isPinned: !currentAction.isPinned,
+      }
     });
 
-    res.json({
-      success: true,
-      embedCount: updated.embedCount,
-      viewCount: updated.viewCount,
-    });
+    res.json(civicAction);
   } catch (error) {
-    console.error('Track view error:', error);
-    res.status(500).json({ error: 'Failed to track view' });
+    console.error('Toggle pin error:', error);
+    res.status(500).json({ error: 'Failed to toggle pin status' });
+  }
+});
+
+// Recommend civic action (admin only)
+app.post('/api/civic-actions/:id/recommend', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const civicAction = await prisma.civicAction.update({
+      where: { id },
+      data: {
+        recommendedBy: userId,
+      },
+      include: {
+        recommender: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          }
+        }
+      }
+    });
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Recommend civic action error:', error);
+    res.status(500).json({ error: 'Failed to recommend civic action' });
+  }
+});
+
+// Set priority (admin only)
+app.post('/api/civic-actions/:id/set-priority', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { id } = req.params;
+    const { priority } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    if (typeof priority !== 'number' || priority < 0 || priority > 100) {
+      return res.status(400).json({ error: 'Priority must be a number between 0 and 100' });
+    }
+
+    const civicAction = await prisma.civicAction.update({
+      where: { id },
+      data: { priority }
+    });
+
+    res.json(civicAction);
+  } catch (error) {
+    console.error('Set priority error:', error);
+    res.status(500).json({ error: 'Failed to set priority' });
   }
 });
 
@@ -2452,27 +2083,27 @@ app.get('/api/user/impact', authenticateToken, async (req, res) => {
               select: {
                 id: true,
                 name: true,
-              },
-            },
-          },
-        },
+              }
+            }
+          }
+        }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
 
     // Separate active commitments (interested/going) from completed
-    const activeCommitments = engagements.filter(
-      (e) => e.status === 'interested' || e.status === 'going'
+    const activeCommitments = engagements.filter(e =>
+      e.status === 'interested' || e.status === 'going'
     );
-    const completedActions = engagements.filter(
-      (e) => e.status === 'completed'
+    const completedActions = engagements.filter(e =>
+      e.status === 'completed'
     );
 
     // Get user's created civic actions
     const createdActions = await prisma.civicAction.findMany({
       where: {
         userId,
-        source: 'user_submitted', // Only user-submitted, not Mobilize sync
+        source: 'user_submitted' // Only user-submitted, not Mobilize sync
       },
       include: {
         engagements: true,
@@ -2480,17 +2111,17 @@ app.get('/api/user/impact', authenticateToken, async (req, res) => {
           select: {
             id: true,
             name: true,
-          },
-        },
+          }
+        }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc' }
     });
 
     // Get user's created articles
     const createdArticles = await prisma.post.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      take: 10,
+      take: 10
     });
 
     // Calculate metrics
@@ -2503,27 +2134,27 @@ app.get('/api/user/impact', authenticateToken, async (req, res) => {
 
     res.json({
       metrics,
-      activeCommitments: activeCommitments.map((e) => ({
+      activeCommitments: activeCommitments.map(e => ({
         id: e.id,
         status: e.status,
         notes: e.notes,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
-        civicAction: e.civicAction,
+        civicAction: e.civicAction
       })),
-      completedActions: completedActions.map((e) => ({
+      completedActions: completedActions.map(e => ({
         id: e.id,
         status: e.status,
         notes: e.notes,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
-        civicAction: e.civicAction,
+        civicAction: e.civicAction
       })),
-      createdActions: createdActions.map((action) => ({
+      createdActions: createdActions.map(action => ({
         ...action,
-        engagementCount: action.engagements.length,
+        engagementCount: action.engagements.length
       })),
-      createdArticles,
+      createdArticles
     });
   } catch (error) {
     console.error('Get user impact error:', error);
@@ -2544,11 +2175,7 @@ app.post('/api/user/engagements', authenticateToken, async (req, res) => {
     // Validate status
     const validStatuses = ['interested', 'going', 'completed'];
     if (status && !validStatuses.includes(status)) {
-      return res
-        .status(400)
-        .json({
-          error: 'Invalid status. Must be one of: interested, going, completed',
-        });
+      return res.status(400).json({ error: 'Invalid status. Must be one of: interested, going, completed' });
     }
 
     // Check if engagement already exists
@@ -2556,15 +2183,13 @@ app.post('/api/user/engagements', authenticateToken, async (req, res) => {
       where: {
         userId_civicActionId: {
           userId,
-          civicActionId,
-        },
-      },
+          civicActionId
+        }
+      }
     });
 
     if (existing) {
-      return res
-        .status(400)
-        .json({ error: 'Engagement already exists. Use PATCH to update.' });
+      return res.status(400).json({ error: 'Engagement already exists. Use PATCH to update.' });
     }
 
     // Create engagement
@@ -2573,7 +2198,7 @@ app.post('/api/user/engagements', authenticateToken, async (req, res) => {
         userId,
         civicActionId,
         status: status || 'interested',
-        notes: notes || null,
+        notes: notes || null
       },
       include: {
         civicAction: {
@@ -2582,11 +2207,11 @@ app.post('/api/user/engagements', authenticateToken, async (req, res) => {
               select: {
                 id: true,
                 name: true,
-              },
-            },
-          },
-        },
-      },
+              }
+            }
+          }
+        }
+      }
     });
 
     res.json(engagement);
@@ -2605,7 +2230,7 @@ app.patch('/api/user/engagements/:id', authenticateToken, async (req, res) => {
 
     // Check if engagement exists and belongs to user
     const existing = await prisma.userEngagement.findUnique({
-      where: { id },
+      where: { id }
     });
 
     if (!existing) {
@@ -2620,12 +2245,7 @@ app.patch('/api/user/engagements/:id', authenticateToken, async (req, res) => {
     if (status) {
       const validStatuses = ['interested', 'going', 'completed'];
       if (!validStatuses.includes(status)) {
-        return res
-          .status(400)
-          .json({
-            error:
-              'Invalid status. Must be one of: interested, going, completed',
-          });
+        return res.status(400).json({ error: 'Invalid status. Must be one of: interested, going, completed' });
       }
     }
 
@@ -2634,7 +2254,7 @@ app.patch('/api/user/engagements/:id', authenticateToken, async (req, res) => {
       where: { id },
       data: {
         status: status ?? undefined,
-        notes: notes !== undefined ? notes : undefined,
+        notes: notes !== undefined ? notes : undefined
       },
       include: {
         civicAction: {
@@ -2643,11 +2263,11 @@ app.patch('/api/user/engagements/:id', authenticateToken, async (req, res) => {
               select: {
                 id: true,
                 name: true,
-              },
-            },
-          },
-        },
-      },
+              }
+            }
+          }
+        }
+      }
     });
 
     res.json(engagement);
@@ -2665,7 +2285,7 @@ app.delete('/api/user/engagements/:id', authenticateToken, async (req, res) => {
 
     // Check if engagement exists and belongs to user
     const existing = await prisma.userEngagement.findUnique({
-      where: { id },
+      where: { id }
     });
 
     if (!existing) {
@@ -2678,7 +2298,7 @@ app.delete('/api/user/engagements/:id', authenticateToken, async (req, res) => {
 
     // Delete engagement
     await prisma.userEngagement.delete({
-      where: { id },
+      where: { id }
     });
 
     res.json({ message: 'Engagement deleted successfully' });
@@ -2708,13 +2328,13 @@ app.post('/api/admin/sync-mobilize', authenticateToken, async (req, res) => {
 
     res.json({
       message: 'Mobilize sync completed',
-      result,
+      result
     });
   } catch (error) {
     console.error('Manual Mobilize sync error:', error);
     res.status(500).json({
       error: 'Sync failed',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
@@ -2725,12 +2345,10 @@ bridgeApp.use(app._router);
 
 // Create a new app that handles both root and /bridge prefix
 const finalApp = express();
-finalApp.use(
-  cors({
-    origin: true, // Allow all origins
-    credentials: true,
-  })
-);
+finalApp.use(cors({
+  origin: true, // Allow all origins
+  credentials: true
+}));
 
 // Add redirect for /wizard/ to /bridge/wizard (only for production server)
 // In development, we want /wizard to work directly
