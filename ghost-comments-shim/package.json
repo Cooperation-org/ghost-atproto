@@ -1,0 +1,63 @@
+{
+  "name": "@ghost-atproto/comments-shim",
+  "version": "0.1.0",
+  "description": "Lightweight shim service to inject Bluesky comments into Ghost's native comments system",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "ghost-comments-shim": "dist/index.js"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "INSTALL.md",
+    "PUBLISH.md",
+    ".env.example",
+    "install.sh"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "ghost",
+    "bluesky",
+    "atproto",
+    "comments",
+    "bridge",
+    "ghost-comments",
+    "bluesky-integration"
+  ],
+  "author": "Ghost ATProto Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Cooperation-org/ghost-atproto.git",
+    "directory": "ghost-comments-shim"
+  },
+  "bugs": {
+    "url": "https://github.com/Cooperation-org/ghost-atproto/issues"
+  },
+  "homepage": "https://github.com/Cooperation-org/ghost-atproto#readme",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "mysql2": "^3.9.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.16",
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
