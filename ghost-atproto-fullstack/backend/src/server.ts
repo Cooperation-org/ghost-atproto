@@ -15,6 +15,7 @@ import passport from 'passport';
 import atprotoRoutes from './routes/atproto';
 import wizardRoutes from './routes/wizard';
 import oauthRoutes from './routes/oauth';
+import ghostRoutes from './routes/ghost';
 import axios from 'axios';
 import { setupGoogleOAuth } from './lib/google-oauth';
 import { setupBlueskyOAuth } from './lib/bluesky-oauth';
@@ -823,6 +824,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/atproto', atprotoRoutes);
 app.use('/api/wizard', wizardRoutes);
 app.use('/api/auth', oauthRoutes);
+app.use('/api/ghost', ghostRoutes);
 
 
 app.get('/api/health', (req, res) => {
