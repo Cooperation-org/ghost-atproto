@@ -4,14 +4,21 @@ import { createDbConnection } from './db';
 import { createCommentsRouter } from './routes/comments';
 
 async function main() {
+  console.log('Ghost Comments Shim v0.1.0');
+  console.log('==========================\n');
+
   try {
-    // Load configuration
+    // Load and validate configuration
+    console.log('Loading configuration...');
     const config = loadConfig();
-    console.log(`Starting Ghost Comments Shim on port ${config.port}...`);
-    console.log(`Database type: ${config.ghostDbType}`);
+    console.log(`✓ Database type: ${config.ghostDbType}`);
+    console.log(`✓ Bluesky member ID: ${config.blueskyMemberId}`);
+    console.log(`✓ Port: ${config.port}`);
 
     // Create database connection
+    console.log('\nConnecting to database...');
     const db = createDbConnection(config);
+    console.log(`✓ Database connection established`);
 
     // Create Express app
     const app = express();
@@ -21,7 +28,7 @@ async function main() {
 
     // Health check endpoint
     app.get('/health', (req, res) => {
-      res.json({ status: 'ok' });
+      res.json({ status: 'ok', version: '0.1.0' });
     });
 
     // Comments endpoint
@@ -29,7 +36,10 @@ async function main() {
 
     // Start server
     const server = app.listen(config.port, () => {
-      console.log(`Ghost Comments Shim listening on port ${config.port}`);
+      console.log(`\n✓ Ghost Comments Shim listening on port ${config.port}`);
+      console.log(`\nEndpoints:`);
+      console.log(`  GET  /health    - Health check`);
+      console.log(`  POST /comments  - Create comment from Bluesky\n`);
     });
 
     // Graceful shutdown

@@ -47,8 +47,14 @@ export async function syncCommentsForPost(
       post.commentMappings.map((m) => [m.bskyReplyUri, m])
     );
 
-    // Process each reply
-    for (const reply of thread.replies) {
+    // Sort replies by createdAt to ensure parents are processed before children
+    // This helps maintain proper parent-child relationships
+    const sortedReplies = [...thread.replies].sort((a, b) => {
+      return new Date(a.record.createdAt).getTime() - new Date(b.record.createdAt).getTime();
+    });
+
+    // Process each reply (sorted oldest first so parents come before children)
+    for (const reply of sortedReplies) {
       try {
         // Skip if already synced
         if (existingMappings.has(reply.uri)) {
@@ -66,8 +72,8 @@ export async function syncCommentsForPost(
 
         // Build Bluesky URLs
         const bskyProfileUrl = `https://bsky.app/profile/${reply.author.handle}`;
-        const postId = reply.uri.split('/').pop() || '';
-        const bskyPostUrl = `https://bsky.app/profile/${reply.author.handle}/post/${postId}`;
+        const replyPostId = reply.uri.split('/').pop() || '';
+        const bskyPostUrl = `https://bsky.app/profile/${reply.author.handle}/post/${replyPostId}`;
 
         // Call shim to create the comment
         const result = await shimClient.createComment({

@@ -45,11 +45,11 @@ export class ShimClient {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
         throw new Error(`Shim API error (${response.status}): ${errorData.error || response.statusText}`);
       }
 
-      return await response.json();
+      return await response.json() as CreateCommentResponse;
     } catch (error) {
       console.error('Error calling shim:', error);
       throw new Error(`Failed to create comment via shim: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -64,7 +64,7 @@ export class ShimClient {
 
     try {
       const response = await fetch(url);
-      const data = await response.json();
+      const data = await response.json() as { status?: string };
       return response.ok && data.status === 'ok';
     } catch (error) {
       console.error('Shim health check failed:', error);

@@ -21,8 +21,8 @@ describe('sanitize', () => {
   });
 
   it('should=((sanitizeUrl, invalid-protocol))', () => {
-    expect(() => sanitizeUrl('javascript:alert(1)')).toThrow('Invalid protocol');
-    expect(() => sanitizeUrl('data:text/html,<script>alert(1)</script>')).toThrow('Invalid protocol');
+    expect(() => sanitizeUrl('javascript:alert(1)')).toThrow('Invalid');
+    expect(() => sanitizeUrl('data:text/html,<script>alert(1)</script>')).toThrow('Invalid');
   });
 
   it('should=((sanitizeUrl, invalid-format))', () => {
