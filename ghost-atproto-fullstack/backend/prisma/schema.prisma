@@ -20,6 +20,7 @@ model User {
   ghostUrl                String?          @map("ghost_url")
   ghostWebhookId          String?          @map("ghost_webhook_id")
   ghostContentApiKey      String?          @map("ghost_content_api_key")
+  blueskyMemberId         String?          @map("bluesky_member_id")
   password                String
   role                    Role             @default(USER)
   autoSync                Boolean          @default(true) @map("auto_sync")
@@ -53,23 +54,24 @@ model OAuthSession {
 }
 
 model Post {
-  id           String    @id @default(cuid())
-  title        String
-  content      String    @db.Text
-  excerpt      String?   @db.Text
-  slug         String
-  status       String    @default("draft")
-  featureImage String?
-  ghostId      String?   @unique
-  ghostSlug    String?
-  ghostUrl     String?
-  atprotoUri   String?
-  atprotoCid   String?
-  publishedAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String           @id @default(cuid())
+  title           String
+  content         String           @db.Text
+  excerpt         String?          @db.Text
+  slug            String
+  status          String           @default("draft")
+  featureImage    String?
+  ghostId         String?          @unique
+  ghostSlug       String?
+  ghostUrl        String?
+  atprotoUri      String?
+  atprotoCid      String?
+  publishedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commentMappings CommentMapping[]
 
   @@index([userId], map: "posts_userId_fkey")
   @@map("posts")
@@ -93,6 +95,20 @@ model SyncLog {
 
   @@index([userId], map: "sync_logs_userId_fkey")
   @@map("sync_logs")
+}
+
+model CommentMapping {
+  id               String   @id @default(cuid())
+  bskyReplyUri     String   @unique @map("bsky_reply_uri")
+  ghostCommentId   String   @map("ghost_comment_id")
+  postId           String   @map("post_id")
+  bskyAuthorDid    String?  @map("bsky_author_did")
+  bskyAuthorHandle String?  @map("bsky_author_handle")
+  createdAt        DateTime @default(now())
+  post             Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("comment_mappings")
 }
 
 model Settings {
