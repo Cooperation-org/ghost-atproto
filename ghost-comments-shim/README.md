@@ -1,91 +1,110 @@
 # Ghost Comments Shim
 
-Lightweight Node.js service that enables inserting Bluesky comments into Ghost's native comments system via direct database injection.
+Lightweight Node.js service that syncs Bluesky replies to your Ghost blog's native comments system.
 
 ## Overview
 
-This shim runs alongside your self-hosted Ghost instance and provides an HTTP endpoint for the ATProto bridge to inject Bluesky comments directly into Ghost's database. All comments appear under a single "Bluesky" member in Ghost.
+When you publish a Ghost post to Bluesky via the [ATProto Bridge](https://github.com/Cooperation-org/ghost-atproto), people can reply to it on Bluesky. This shim syncs those replies back to Ghost as native comments, so they appear on your blog.
 
-## Installation
-
-```bash
-npm install @ghost-atproto/comments-shim
+**Architecture:**
+```
+Bluesky → ATProto Bridge → This Shim → Ghost Database
+                ↑                           ↓
+         (central service)          (your Ghost server)
 ```
 
-Or from source:
+The shim runs **on your Ghost server** and receives comments from the central bridge.
+
+## Quick Start
+
+### 1. Install the shim on your Ghost server
 
 ```bash
-git clone <repo>
-cd ghost-comments-shim
-npm install
-npm run build
+# Using npm (recommended)
+npm install -g @ghost-atproto/comments-shim
+
+# Or from source
+git clone https://github.com/Cooperation-org/ghost-atproto.git
+cd ghost-atproto/ghost-comments-shim
+npm install && npm run build
 ```
 
-## Configuration
+### 2. Create a Bluesky member in Ghost
 
-Copy `.env.example` to `.env` and configure:
+All synced comments will appear under this member:
+
+1. Go to **Ghost Admin → Members → New member**
+2. Fill in:
+   - **Email:** `comments@bsky.atproto.invalid`
+   - **Name:** `Bluesky`
+   - **Note:** `Bridged comments from Bluesky/ATProto`
+   - **Subscribed:** No
+3. Save and copy the **member ID** from the URL (24-character hex string)
+
+### 3. Configure the shim
+
+Create a `.env` file:
 
 ```bash
-# Database Type
-GHOST_DB_TYPE=mysql  # or sqlite
+# Database (same credentials Ghost uses)
+GHOST_DB_TYPE=mysql
+GHOST_DB_CONNECTION=mysql://ghost:yourpassword@localhost:3306/ghost_production
 
-# Database Connection
-# MySQL: mysql://user:password@localhost:3306/ghost_production
-# SQLite: /var/www/ghost/content/data/ghost.db
-GHOST_DB_CONNECTION=mysql://ghost:password@localhost:3306/ghost_production
-
-# Shared secret for bridge authentication (min 32 chars)
+# Shared secret (coordinate with the bridge admin - min 32 chars)
 BRIDGE_SHARED_SECRET=your-super-secret-key-min-32-characters-long
 
-# Ghost member ID for the Bluesky member (obtain from Ghost Admin)
+# The member ID you copied in step 2
 BLUESKY_MEMBER_ID=507f1f77bcf86cd799439011
 
-# Port (default: 3001)
+# Port to listen on
 PORT=3001
 ```
 
-### Getting the Bluesky Member ID
-
-Before running the shim, create a "Bluesky" member in Ghost:
-
-1. Go to Ghost Admin → Members
-2. Create new member:
-   - Email: `comments@bsky.atproto.invalid` (`.invalid` TLD prevents email sending)
-   - Name: `Bluesky`
-   - Note: `Bridged comments from Bluesky/ATProto`
-   - Subscribed: No
-   - Add label: `bluesky-bridge`
-3. Copy the member ID from the URL or via Ghost Admin API
-
-Alternatively, use the bridge's admin interface to create the member automatically.
-
-## Usage
-
-### Development
+### 4. Run the shim
 
 ```bash
+# Development
 npm run dev
-```
 
-### Production
-
-```bash
-npm run build
+# Production
 npm start
 ```
 
-### Docker
+### 5. Configure the bridge
 
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY dist ./dist
-CMD ["node", "dist/index.js"]
+In the ATProto Bridge dashboard:
+1. Go to Settings → Comment Sync
+2. Enter your shim URL (e.g., `http://your-ghost-server:3001`)
+3. Enter the same shared secret you configured in step 3
+
+## Configuration Reference
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GHOST_DB_TYPE` | Yes | `mysql` or `sqlite` |
+| `GHOST_DB_CONNECTION` | Yes | Database connection string |
+| `BRIDGE_SHARED_SECRET` | Yes | Shared secret with bridge (32+ chars) |
+| `BLUESKY_MEMBER_ID` | Yes | Ghost member ID (24-char hex) |
+| `PORT` | No | Port to listen on (default: 3001) |
+
+### Finding your Ghost database credentials
+
+**For MySQL (most common):**
+```bash
+cat /var/www/ghost/config.production.json | grep -A5 database
 ```
 
-### Systemd Service
+**For SQLite:**
+```bash
+# Usually at:
+/var/www/ghost/content/data/ghost.db
+```
+
+## Running as a Service
+
+### Systemd (recommended)
+
+Create `/etc/systemd/system/ghost-comments-shim.service`:
 
 ```ini
 [Unit]
@@ -105,7 +124,26 @@ EnvironmentFile=/var/www/ghost-comments-shim/.env
 WantedBy=multi-user.target
 ```
 
-## API
+Enable and start:
+
+```bash
+sudo systemctl enable ghost-comments-shim
+sudo systemctl start ghost-comments-shim
+sudo systemctl status ghost-comments-shim
+```
+
+### Docker
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY dist ./dist
+CMD ["node", "dist/index.js"]
+```
+
+## API Reference
 
 ### POST /comments
 
@@ -135,11 +173,6 @@ Insert a Bluesky comment into Ghost.
 }
 ```
 
-**Error Responses:**
-- `400`: Invalid request body
-- `401`: Invalid or missing authorization
-- `500`: Internal server error
-
 ### GET /health
 
 Health check endpoint.
@@ -147,7 +180,8 @@ Health check endpoint.
 **Response (200):**
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "version": "0.1.0"
 }
 ```
 
