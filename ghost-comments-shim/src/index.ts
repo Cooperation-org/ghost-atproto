@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import express from 'express';
 import { loadConfig } from './config';
 import { createDbConnection } from './db';

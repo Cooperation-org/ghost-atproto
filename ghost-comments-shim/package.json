@@ -1,6 +1,6 @@
 {
   "name": "@cooperation/ghost-sync-bluesky",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lightweight shim service to inject Bluesky comments into Ghost's native comments system",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
