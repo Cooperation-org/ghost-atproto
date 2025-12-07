@@ -275,6 +275,18 @@ class ApiClient {
     return this.request('/api/health');
   }
 
+  // Shim Configuration
+  async saveShimConfig(shimUrl: string, shimSecret: string): Promise<{ success: boolean; message: string }> {
+    return this.request('/api/ghost/shim/config', {
+      method: 'POST',
+      body: JSON.stringify({ shimUrl, shimSecret }),
+    });
+  }
+
+  async getShimStatus(): Promise<{ configured: boolean; healthy: boolean; shimUrl?: string; message?: string }> {
+    return this.request('/api/ghost/shim/status');
+  }
+
   // Civic Actions (user-submitted)
   
   // PUBLIC: Get approved civic actions (no authentication required)

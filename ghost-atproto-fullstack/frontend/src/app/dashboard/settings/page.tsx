@@ -15,12 +15,15 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Link,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import WebhookIcon from '@mui/icons-material/Webhook';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import SyncIcon from '@mui/icons-material/Sync';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
 import { User } from '@/lib/types';
@@ -41,7 +44,15 @@ export default function SettingsPage() {
     ghostContentApiKey: '',
     blueskyHandle: '',
     blueskyPassword: '',
+    shimUrl: '',
+    shimSecret: '',
   });
+
+  const [shimStatus, setShimStatus] = useState<{
+    configured: boolean;
+    healthy: boolean;
+    checking: boolean;
+  }>({ configured: false, healthy: false, checking: false });
 
   useEffect(() => {
     const loadUser = async () => {
@@ -55,7 +66,14 @@ export default function SettingsPage() {
           ghostContentApiKey: userData.ghostContentApiKey || '',
           blueskyHandle: userData.blueskyHandle || '',
           blueskyPassword: userData.blueskyPassword || '',
+          shimUrl: userData.shimUrl || '',
+          shimSecret: userData.shimSecret || '',
         });
+
+        // Check shim status if configured
+        if (userData.shimUrl && userData.shimSecret) {
+          checkShimStatus();
+        }
       } catch {
         setError('Failed to load user data');
       } finally {
@@ -68,6 +86,43 @@ export default function SettingsPage() {
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const checkShimStatus = async () => {
+    setShimStatus(prev => ({ ...prev, checking: true }));
+    try {
+      const status = await api.getShimStatus();
+      setShimStatus({
+        configured: status.configured,
+        healthy: status.healthy,
+        checking: false,
+      });
+    } catch {
+      setShimStatus({ configured: false, healthy: false, checking: false });
+    }
+  };
+
+  const handleSaveShimConfig = async () => {
+    if (!formData.shimUrl || !formData.shimSecret) {
+      setError('Shim URL and Secret are required');
+      return;
+    }
+    if (formData.shimSecret.length < 32) {
+      setError('Shim Secret must be at least 32 characters');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      await api.saveShimConfig(formData.shimUrl, formData.shimSecret);
+      setSuccess('Comment sync configuration saved!');
+      checkShimStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save shim configuration');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSave = async () => {
@@ -165,6 +220,35 @@ export default function SettingsPage() {
               label="Display Name"
               value={formData.name}
               onChange={handleChange('name')}
+            />
+          </Grid>
+        </Grid>
+      </Paper>
+
+      <Paper sx={{ p: 3, mt: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Bluesky Configuration
+        </Typography>
+        <Grid container spacing={2} sx={{ mt: 1 }}>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              label="Bluesky Handle"
+              value={formData.blueskyHandle}
+              onChange={handleChange('blueskyHandle')}
+              placeholder="yourhandle.bsky.social"
+              helperText="Your Bluesky username"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              fullWidth
+              label="Bluesky App Password"
+              type="password"
+              value={formData.blueskyPassword}
+              onChange={handleChange('blueskyPassword')}
+              placeholder="xxxx-xxxx-xxxx-xxxx"
+              helperText="Generate app password in Bluesky Settings → App Passwords"
             />
           </Grid>
         </Grid>
@@ -291,30 +375,76 @@ export default function SettingsPage() {
       )}
 
       <Paper sx={{ p: 3, mt: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Bluesky Configuration
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <SyncIcon sx={{ mr: 1, color: 'primary.main' }} />
+          <Typography variant="h6" sx={{ mb: 0 }}>
+            Comment Sync Configuration
+          </Typography>
+          {shimStatus.configured && (
+            <Chip
+              icon={shimStatus.healthy ? <CheckCircleIcon /> : <ErrorIcon />}
+              label={shimStatus.healthy ? 'Connected' : 'Not Reachable'}
+              color={shimStatus.healthy ? 'success' : 'error'}
+              size="small"
+              sx={{ ml: 2 }}
+            />
+          )}
+          {shimStatus.checking && (
+            <CircularProgress size={16} sx={{ ml: 2 }} />
+          )}
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Sync Bluesky replies back to Ghost as native comments.{' '}
+          <Link
+            href="https://github.com/Cooperation-org/ghost-atproto/tree/main/ghost-comments-shim#readme"
+            target="_blank"
+            rel="noopener"
+          >
+            Requires shim installed on your Ghost server
+          </Link>
         </Typography>
-        <Grid container spacing={2} sx={{ mt: 1 }}>
+        <Grid container spacing={2}>
           <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
-              label="Bluesky Handle"
-              value={formData.blueskyHandle}
-              onChange={handleChange('blueskyHandle')}
-              placeholder="yourhandle.bsky.social"
-              helperText="Your Bluesky username"
+              label="Shim URL"
+              value={formData.shimUrl}
+              onChange={handleChange('shimUrl')}
+              placeholder="http://localhost:3001"
+              helperText="URL where the comment shim is running on your Ghost server"
             />
           </Grid>
           <Grid size={{ xs: 12 }}>
             <TextField
               fullWidth
-              label="Bluesky App Password"
+              label="Shim Secret"
               type="password"
-              value={formData.blueskyPassword}
-              onChange={handleChange('blueskyPassword')}
-              placeholder="xxxx-xxxx-xxxx-xxxx"
-              helperText="Generate app password in Bluesky Settings → App Passwords"
+              value={formData.shimSecret}
+              onChange={handleChange('shimSecret')}
+              placeholder="32+ character shared secret"
+              helperText="Must match BRIDGE_SHARED_SECRET in your shim's .env file"
             />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={handleSaveShimConfig}
+                disabled={saving || !formData.shimUrl || !formData.shimSecret}
+              >
+                Save Shim Config
+              </Button>
+              {shimStatus.configured && (
+                <Button
+                  variant="text"
+                  onClick={checkShimStatus}
+                  disabled={shimStatus.checking}
+                  startIcon={shimStatus.checking ? <CircularProgress size={16} /> : <SyncIcon />}
+                >
+                  Test Connection
+                </Button>
+              )}
+            </Box>
           </Grid>
         </Grid>
       </Paper>
