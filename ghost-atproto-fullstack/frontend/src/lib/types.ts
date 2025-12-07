@@ -8,6 +8,8 @@ export interface User {
   ghostUrl: string | null;
   ghostApiKey: string | null;
   ghostContentApiKey: string | null;
+  shimUrl: string | null;
+  shimSecret: string | null;
   createdAt: string;
 }
 
