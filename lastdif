@@ -1,0 +1,1026 @@
+diff --git a/ghost-atproto-fullstack/backend/package.json b/ghost-atproto-fullstack/backend/package.json
+index b00c634..8dedb13 100644
+--- a/ghost-atproto-fullstack/backend/package.json
++++ b/ghost-atproto-fullstack/backend/package.json
+@@ -15,6 +15,8 @@
+     "@atproto/api": "^0.16.11",
+     "@atproto/oauth-client-node": "^0.3.8",
+     "@prisma/client": "^6.17.0",
++    "@types/passport": "^1.0.17",
++    "@types/passport-google-oauth20": "^2.0.16",
+     "axios": "^1.12.2",
+     "bcryptjs": "^3.0.2",
+     "cookie-parser": "^1.4.7",
+@@ -24,7 +26,9 @@
+     "express-session": "^1.18.2",
+     "jsonwebtoken": "^9.0.2",
+     "morgan": "^1.10.1",
+-    "mysql2": "^3.15.1"
++    "mysql2": "^3.15.1",
++    "passport": "^0.7.0",
++    "passport-google-oauth20": "^2.0.0"
+   },
+   "devDependencies": {
+     "@types/bcryptjs": "^3.0.0",
+diff --git a/ghost-atproto-fullstack/backend/public/client-metadata.json b/ghost-atproto-fullstack/backend/public/client-metadata.json
+index 9530ec1..77b5af4 100644
+--- a/ghost-atproto-fullstack/backend/public/client-metadata.json
++++ b/ghost-atproto-fullstack/backend/public/client-metadata.json
+@@ -1,14 +1,22 @@
+ {
+-  "client_id": "https://your-domain.com/client-metadata.json",
+-  "client_name": "Ghost to Bluesky Integration",
+-  "client_uri": "https://your-domain.com",
++  "client_id": "http://127.0.0.1:5000/client-metadata.json",
++  "client_name": "Ghost ATProto Bridge",
++  "client_uri": "http://127.0.0.1:5000",
++  "logo_uri": "http://127.0.0.1:5000/logo.png",
++  "tos_uri": "http://127.0.0.1:5000/terms",
++  "policy_uri": "http://127.0.0.1:5000/privacy",
+   "redirect_uris": [
+-    "https://your-domain.com/api/oauth/callback"
++    "http://127.0.0.1:5000/api/auth/bluesky/callback"
+   ],
+   "scope": "atproto transition:generic",
+-  "grant_types": ["authorization_code", "refresh_token"],
+-  "response_types": ["code"],
++  "grant_types": [
++    "authorization_code",
++    "refresh_token"
++  ],
++  "response_types": [
++    "code"
++  ],
++  "token_endpoint_auth_method": "none",
+   "application_type": "web",
+-  "token_endpoint_auth_method": "private_key_jwt",
+   "dpop_bound_access_tokens": true
+ }
+diff --git a/ghost-atproto-fullstack/backend/src/lib/bluesky-oauth.ts b/ghost-atproto-fullstack/backend/src/lib/bluesky-oauth.ts
+new file mode 100644
+index 0000000..c945d97
+--- /dev/null
++++ b/ghost-atproto-fullstack/backend/src/lib/bluesky-oauth.ts
+@@ -0,0 +1,180 @@
++import { NodeOAuthClient, NodeSavedState, NodeSavedSession } from '@atproto/oauth-client-node';
++import { SimpleStoreMemory } from '@atproto-labs/simple-store-memory';
++import { PrismaClient } from '@prisma/client';
++import { oauthConfig } from './oauth-config';
++
++const prisma = new PrismaClient();
++
++/**
++ * Bluesky OAuth Implementation following official Statusphere example
++ * https://docs.bsky.app/docs/starter-templates/apps
++ */
++
++let oauthClient: NodeOAuthClient | null = null;
++
++export async function setupBlueskyOAuth() {
++  try {
++    // Check if we have a production setup (real domain with HTTPS)
++    const hasProductionSetup = 
++      process.env.APP_URL?.startsWith('https://') && 
++      !process.env.APP_URL.includes('localhost') &&
++      !process.env.APP_URL.includes('127.0.0.1');
++
++    if (!hasProductionSetup) {
++      console.log('⚠️  Bluesky OAuth requires HTTPS + domain name');
++      console.log('ℹ️  For development: Use Bluesky app passwords (Settings → App Passwords)');
++      console.log('ℹ️  For production: Set APP_URL to your https:// domain');
++      return null;
++    }
++
++    // Create in-memory stores for state and session with proper types
++    const stateStore = new SimpleStoreMemory<string, NodeSavedState>({ 
++      max: 100, 
++      ttl: 10 * 60 * 1000, 
++      ttlAutopurge: true 
++    });
++    const sessionStore = new SimpleStoreMemory<string, NodeSavedSession>({ max: 100 });
++
++    // Production setup with proper domain
++    const appUrl = process.env.APP_URL!;
++    const clientId = process.env.BLUESKY_CLIENT_ID || `${appUrl}/client-metadata.json`;
++    const redirectUri = process.env.BLUESKY_REDIRECT_URI || `${appUrl}/api/auth/bluesky/callback`;
++
++    // Initialize OAuth client for production
++    oauthClient = new NodeOAuthClient({
++      clientMetadata: {
++        client_id: clientId,
++        client_name: 'Ghost ATProto Bridge',
++        client_uri: appUrl,
++        redirect_uris: [redirectUri],
++        scope: 'atproto transition:generic',
++        grant_types: ['authorization_code', 'refresh_token'],
++        response_types: ['code'],
++        token_endpoint_auth_method: 'none',
++        application_type: 'web',
++        dpop_bound_access_tokens: true,
++      },
++      stateStore,
++      sessionStore,
++    });
++
++    console.log(`✅ Bluesky ATProto OAuth configured for production`);
++    return oauthClient;
++  } catch (error) {
++    console.error('Failed to setup Bluesky OAuth:', error);
++    console.log('ℹ️  Falling back to app password authentication');
++    return null;
++  }
++}
++
++export function getBlueskyOAuthClient(): NodeOAuthClient | null {
++  return oauthClient;
++}
++
++/**
++ * Initiate OAuth flow (following statusphere example)
++ */
++export async function initiateBlueskyLogin(handle: string): Promise<string> {
++  if (!oauthClient) {
++    throw new Error('OAuth client not initialized');
++  }
++
++  try {
++    // Exactly like statusphere: await oauthClient.authorize(handle, { scope: ... })
++    const url = await oauthClient.authorize(handle, {
++      scope: 'atproto transition:generic',
++    });
++
++    console.log(`✅ Generated OAuth URL for ${handle}`);
++    return url.toString();
++  } catch (error) {
++    console.error('Failed to initiate OAuth:', error);
++    throw new Error(`Failed to resolve handle: ${handle}`);
++  }
++}
++
++/**
++ * Handle OAuth callback (following statusphere example)
++ */
++export async function handleBlueskyCallback(params: URLSearchParams): Promise<{
++  user: any;
++  did: string;
++}> {
++  if (!oauthClient) {
++    throw new Error('OAuth client not initialized');
++  }
++
++  try {
++    // Exactly like statusphere: const { session } = await oauthClient.callback(params)
++    const { session } = await oauthClient.callback(params);
++    const did = session.did;
++
++    // Get agent for this session
++    const agent = await oauthClient.restore(did);
++    
++    // Import BskyAgent to get profile
++    const { BskyAgent } = await import('@atproto/api');
++    const bskyAgent = new BskyAgent({ service: 'https://bsky.social' });
++    
++    // Restore session from OAuth client (agent here is OAuthSession, not BskyAgent)
++    if ('accessJwt' in agent && 'refreshJwt' in agent) {
++      await bskyAgent.resumeSession({
++        accessJwt: agent.accessJwt as string,
++        refreshJwt: agent.refreshJwt as string,
++        did,
++        handle: '',
++        active: true,
++      });
++    }
++    
++    const profile = await bskyAgent.getProfile({ actor: did });
++    const handle = profile.data.handle;
++    const displayName = profile.data.displayName || handle;
++
++    // Find or create user
++    const email = `${handle.replaceAll('.', '_')}@bsky.social`;
++    let user = await prisma.user.findUnique({ where: { email } });
++
++    if (user) {
++      user = await prisma.user.update({
++        where: { id: user.id },
++        data: { name: displayName, blueskyHandle: handle, blueskyDid: did },
++      });
++    } else {
++      user = await prisma.user.create({
++        data: { email, name: displayName, role: 'USER', blueskyHandle: handle, blueskyDid: did },
++      });
++    }
++
++    console.log(`✅ OAuth session created for ${handle} (${did})`);
++
++    return { user, did };
++  } catch (error) {
++    console.error('OAuth callback error:', error);
++    throw error;
++  }
++}
++
++/**
++ * Get authenticated agent for user (using OAuth client restore)
++ */
++export async function getBlueskyAgent(userId: string) {
++  if (!oauthClient) {
++    return null;
++  }
++
++  const user = await prisma.user.findUnique({ where: { id: userId } });
++  if (!user?.blueskyDid) {
++    return null;
++  }
++
++  try {
++    // Use OAuth client to restore session
++    const agent = await oauthClient.restore(user.blueskyDid);
++    return agent;
++  } catch (error) {
++    console.error('Failed to restore agent:', error);
++    return null;
++  }
++}
++
+diff --git a/ghost-atproto-fullstack/backend/src/lib/google-oauth.ts b/ghost-atproto-fullstack/backend/src/lib/google-oauth.ts
+new file mode 100644
+index 0000000..2cf54e8
+--- /dev/null
++++ b/ghost-atproto-fullstack/backend/src/lib/google-oauth.ts
+@@ -0,0 +1,129 @@
++import passport from 'passport';
++import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
++import { PrismaClient } from '@prisma/client';
++import { oauthConfig } from './oauth-config';
++
++const prisma = new PrismaClient();
++
++export function setupGoogleOAuth() {
++  // Only setup if Google credentials are available
++  if (!oauthConfig.google.clientId || !oauthConfig.google.clientSecret) {
++    console.log('⚠️  Skipping Google OAuth setup - credentials not configured');
++    return;
++  }
++
++  passport.use(
++    new GoogleStrategy(
++      {
++        clientID: oauthConfig.google.clientId,
++        clientSecret: oauthConfig.google.clientSecret,
++        callbackURL: oauthConfig.google.callbackURL,
++      },
++      async (accessToken, refreshToken, profile, done) => {
++        try {
++          // Extract profile information
++          const googleId = profile.id;
++          const email = profile.emails?.[0]?.value;
++          const name = profile.displayName;
++          const picture = profile.photos?.[0]?.value;
++
++          if (!email) {
++            return done(new Error('No email found in Google profile'));
++          }
++
++          // Find or create OAuth account
++          let oauthAccount = await prisma.oAuthAccount.findUnique({
++            where: {
++              provider_providerId: {
++                provider: 'google',
++                providerId: googleId,
++              },
++            },
++            include: { user: true },
++          });
++
++          let user;
++
++          if (oauthAccount) {
++            // Update existing OAuth account
++            oauthAccount = await prisma.oAuthAccount.update({
++              where: { id: oauthAccount.id },
++              data: {
++                accessToken,
++                refreshToken: refreshToken || undefined,
++                email,
++                name,
++                picture,
++              },
++              include: { user: true },
++            });
++            user = oauthAccount.user;
++          } else {
++            // Check if user exists with this email
++            user = await prisma.user.findUnique({ where: { email } });
++
++            if (user) {
++              // Link Google account to existing user
++              oauthAccount = await prisma.oAuthAccount.create({
++                data: {
++                  userId: user.id,
++                  provider: 'google',
++                  providerId: googleId,
++                  email,
++                  name,
++                  picture,
++                  accessToken,
++                  refreshToken,
++                },
++                include: { user: true },
++              });
++            } else {
++              // Create new user and link Google account
++              user = await prisma.user.create({
++                data: {
++                  email,
++                  name,
++                  role: 'USER',
++                  oauthAccounts: {
++                    create: {
++                      provider: 'google',
++                      providerId: googleId,
++                      email,
++                      name,
++                      picture,
++                      accessToken,
++                      refreshToken,
++                    },
++                  },
++                },
++              });
++            }
++          }
++
++          return done(null, user);
++        } catch (error) {
++          console.error('Google OAuth error:', error);
++          return done(error as Error);
++        }
++      }
++    )
++  );
++
++  // Serialize user for session
++  passport.serializeUser((user: any, done) => {
++    done(null, user.id);
++  });
++
++  // Deserialize user from session
++  passport.deserializeUser(async (id: string, done) => {
++    try {
++      const user = await prisma.user.findUnique({ where: { id } });
++      done(null, user);
++    } catch (error) {
++      done(error);
++    }
++  });
++
++  console.log('✅ Google OAuth configured');
++}
++
+diff --git a/ghost-atproto-fullstack/backend/src/lib/oauth-config.ts b/ghost-atproto-fullstack/backend/src/lib/oauth-config.ts
+new file mode 100644
+index 0000000..6107762
+--- /dev/null
++++ b/ghost-atproto-fullstack/backend/src/lib/oauth-config.ts
+@@ -0,0 +1,42 @@
++import dotenv from 'dotenv';
++
++dotenv.config();
++
++export const oauthConfig = {
++  google: {
++    clientId: process.env.GOOGLE_CLIENT_ID || '',
++    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
++    callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://127.0.0.1:5000/api/auth/google/callback',
++  },
++  bluesky: {
++    // RFC 8252 requires 127.0.0.1 instead of localhost for loopback
++    clientId: process.env.BLUESKY_CLIENT_ID || 'http://127.0.0.1:5000/client-metadata.json',
++    redirectUri: process.env.BLUESKY_REDIRECT_URI || 'http://127.0.0.1:5000/api/auth/bluesky/callback',
++    scope: 'atproto transition:generic',
++  },
++  session: {
++    secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'your-secret-key-change-in-production',
++  }
++};
++
++export function validateOAuthConfig() {
++  const warnings: string[] = [];
++
++  if (!oauthConfig.google.clientId || !oauthConfig.google.clientSecret) {
++    warnings.push('⚠️  Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET');
++  }
++
++  // Bluesky OAuth is currently disabled (placeholder implementation)
++  // warnings.push('ℹ️  Bluesky OAuth: Use app passwords in settings for now');
++
++  if (warnings.length > 0) {
++    console.log('\n📝 OAuth Configuration:');
++    for (const warning of warnings) {
++      console.log(warning);
++    }
++    console.log('');
++  }
++
++  return warnings.length === 0;
++}
++
+diff --git a/ghost-atproto-fullstack/backend/src/routes/oauth.ts b/ghost-atproto-fullstack/backend/src/routes/oauth.ts
+new file mode 100644
+index 0000000..cd99510
+--- /dev/null
++++ b/ghost-atproto-fullstack/backend/src/routes/oauth.ts
+@@ -0,0 +1,211 @@
++import express from 'express';
++import passport from 'passport';
++import jwt from 'jsonwebtoken';
++import { PrismaClient } from '@prisma/client';
++import { initiateBlueskyLogin, handleBlueskyCallback, getBlueskyOAuthClient } from '../lib/bluesky-oauth';
++
++const router = express.Router();
++const prisma = new PrismaClient();
++const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
++
++// ==================== Google OAuth Routes ====================
++
++/**
++ * Initiate Google OAuth flow
++ * GET /api/auth/google
++ */
++router.get('/google', passport.authenticate('google', {
++  scope: ['profile', 'email'],
++  session: false,
++}));
++
++/**
++ * Google OAuth callback
++ * GET /api/auth/google/callback
++ */
++router.get('/google/callback',
++  passport.authenticate('google', { 
++    failureRedirect: '/login?error=google_auth_failed',
++    session: false 
++  }),
++  (req, res) => {
++    try {
++      const user = req.user as any;
++
++      if (!user) {
++        return res.redirect('/login?error=no_user');
++      }
++
++      // Generate JWT token
++      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
++
++      // Set cookie
++      res.cookie('token', token, {
++        httpOnly: true,
++        secure: process.env.NODE_ENV === 'production',
++        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
++      });
++
++      // Redirect to dashboard based on role
++      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
++      let redirectPath = '/dashboard';
++      if (user.role === 'ADMIN') {
++        redirectPath = '/dashboard/civic-actions';
++      } else if (user.role === 'AUTHOR') {
++        redirectPath = '/bridge/wizard';
++      }
++
++      res.redirect(`${frontendUrl}${redirectPath}`);
++    } catch (error) {
++      console.error('Google OAuth callback error:', error);
++      res.redirect('/login?error=callback_failed');
++    }
++  }
++);
++
++// ==================== Bluesky OAuth Routes ====================
++
++/**
++ * Bluesky login - OAuth if configured, otherwise app password
++ * POST /api/auth/bluesky
++ * Body: { handle: "user.bsky.social", password?: "app-password" }
++ */
++router.post('/bluesky', async (req, res) => {
++  try {
++    const { handle, password } = req.body;
++
++    if (!handle) {
++      return res.status(400).json({ 
++        error: 'Bluesky handle is required',
++        example: 'user.bsky.social' 
++      });
++    }
++
++    // Try OAuth first (if configured for production)
++    const oauthClient = getBlueskyOAuthClient();
++    if (oauthClient && !password) {
++      try {
++        const authUrl = await initiateBlueskyLogin(handle);
++        return res.json({ authUrl });
++      } catch (oauthError) {
++        console.log('OAuth not available, falling back to app password');
++      }
++    }
++
++    // Fallback: App password authentication
++    if (!password) {
++      return res.status(400).json({ 
++        error: 'Bluesky app password is required for development',
++        hint: 'Generate an app password at https://bsky.app/settings/app-passwords',
++        needsPassword: true
++      });
++    }
++
++    // App password login
++    const { BskyAgent } = await import('@atproto/api');
++    const agent = new BskyAgent({ service: 'https://bsky.social' });
++    await agent.login({ identifier: handle, password });
++
++    const profile = await agent.getProfile({ actor: agent.session?.did || handle });
++    const did = agent.session?.did || '';
++    const displayName = profile.data.displayName || handle;
++
++    const email = `${handle.replaceAll('.', '_')}@bsky.social`;
++    let user = await prisma.user.findUnique({ where: { email } });
++
++    if (user) {
++      user = await prisma.user.update({
++        where: { id: user.id },
++        data: { name: displayName, blueskyHandle: handle, blueskyPassword: password, blueskyDid: did },
++      });
++    } else {
++      user = await prisma.user.create({
++        data: { email, name: displayName, role: 'USER', blueskyHandle: handle, blueskyPassword: password, blueskyDid: did },
++      });
++    }
++
++    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
++    res.cookie('token', token, {
++      httpOnly: true,
++      secure: process.env.NODE_ENV === 'production',
++      maxAge: 7 * 24 * 60 * 60 * 1000
++    });
++
++    res.json({
++      success: true,
++      user: { id: user.id, email: user.email, name: user.name, blueskyHandle: user.blueskyHandle, role: user.role },
++      token,
++    });
++  } catch (error: any) {
++    console.error('Bluesky login error:', error);
++    if (error.message?.includes('Invalid identifier or password')) {
++      return res.status(401).json({ error: 'Invalid Bluesky credentials' });
++    }
++    res.status(500).json({ error: 'Bluesky login failed', message: error instanceof Error ? error.message : 'Unknown error' });
++  }
++});
++
++/**
++ * Bluesky OAuth callback (following statusphere example)
++ * GET /api/auth/bluesky/callback
++ */
++router.get('/bluesky/callback', async (req, res) => {
++  try {
++    // Get OAuth params from URL
++    const params = new URLSearchParams(req.url.split('?')[1]);
++
++    // Complete OAuth flow exactly like statusphere
++    const { user } = await handleBlueskyCallback(params);
++
++    // Generate JWT token
++    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
++
++    // Set cookie
++    res.cookie('token', token, {
++      httpOnly: true,
++      secure: process.env.NODE_ENV === 'production',
++      maxAge: 7 * 24 * 60 * 60 * 1000
++    });
++
++    // Redirect to dashboard
++    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
++    let redirectPath = '/dashboard';
++    if (user.role === 'ADMIN') {
++      redirectPath = '/dashboard/civic-actions';
++    } else if (user.role === 'AUTHOR') {
++      redirectPath = '/bridge/wizard';
++    }
++
++    res.redirect(`${frontendUrl}${redirectPath}`);
++  } catch (error) {
++    console.error('Bluesky OAuth callback error:', error);
++    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
++    res.redirect(`${frontendUrl}/login?error=bluesky_auth_failed`);
++  }
++});
++
++// ==================== OAuth Info Route ====================
++
++/**
++ * Get OAuth configuration info (for frontend)
++ * GET /api/auth/oauth/config
++ */
++router.get('/oauth/config', (req, res) => {
++  res.json({
++    google: {
++      enabled: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
++      buttonText: 'Continue with Google',
++    },
++    bluesky: {
++      enabled: true,
++      buttonText: 'Continue with Bluesky',
++      requiresHandle: true,
++      requiresPassword: true, // App passwords for development, OAuth for production
++      handlePlaceholder: 'your-handle.bsky.social',
++      passwordPlaceholder: 'App Password',
++    },
++  });
++});
++
++export default router;
++
+diff --git a/ghost-atproto-fullstack/backend/src/server.ts b/ghost-atproto-fullstack/backend/src/server.ts
+index e0eca25..d52580c 100644
+--- a/ghost-atproto-fullstack/backend/src/server.ts
++++ b/ghost-atproto-fullstack/backend/src/server.ts
+@@ -11,9 +11,14 @@ import session from 'express-session';
+ import cookieParser from 'cookie-parser';
+ import jwt from 'jsonwebtoken';
+ import bcrypt from 'bcryptjs';
++import passport from 'passport';
+ import atprotoRoutes from './routes/atproto';
+ import wizardRoutes from './routes/wizard';
++import oauthRoutes from './routes/oauth';
+ import axios from 'axios';
++import { setupGoogleOAuth } from './lib/google-oauth';
++import { setupBlueskyOAuth } from './lib/bluesky-oauth';
++import { validateOAuthConfig } from './lib/oauth-config';
+ 
+ // Load environment variables
+ dotenv.config();
+@@ -33,9 +38,11 @@ app.use(morgan('dev'));
+ 
+ app.use(cors({
+   origin: [
+-    process.env.FRONTEND_URL || 'http://localhost:3000',
++    process.env.FRONTEND_URL || 'http://127.0.0.1:3000',
++    'http://localhost:3000',
+     'http://localhost:3001', // Allow port 3001 as well
+-    'http://localhost:3000'
++    'http://127.0.0.1:3000', // RFC 8252 requirement for OAuth
++    'http://127.0.0.1:3001'
+   ],
+   credentials: true
+ }));
+@@ -52,6 +59,17 @@ app.use(session({
+   }
+ }));
+ 
++// Initialize Passport for OAuth
++app.use(passport.initialize());
++app.use(passport.session());
++
++// Setup OAuth providers
++setupGoogleOAuth();
++setupBlueskyOAuth(); // Full AT Protocol OAuth following official docs
++
++// Validate OAuth configuration
++validateOAuthConfig();
++
+ // Serve static files (for client-metadata.json)
+ app.use(express.static(path.join(__dirname, '../public')));
+ 
+@@ -804,6 +822,7 @@ app.use(express.json({ limit: '10mb' }));
+ // Routes
+ app.use('/api/atproto', atprotoRoutes);
+ app.use('/api/wizard', wizardRoutes);
++app.use('/api/auth', oauthRoutes);
+ 
+ 
+ app.get('/api/health', (req, res) => {
+@@ -826,6 +845,11 @@ app.post('/api/auth/login', async (req, res) => {
+       return res.status(401).json({ error: 'Invalid email or password' });
+     }
+ 
++    // Check if user has a password (OAuth users might not have one)
++    if (!user.password) {
++      return res.status(401).json({ error: 'This account uses OAuth. Please sign in with Google or Bluesky.' });
++    }
++
+     // Verify password
+     const isValidPassword = await bcrypt.compare(password, user.password);
+     if (!isValidPassword) {
+diff --git a/ghost-atproto-fullstack/frontend/src/app/login/page.tsx b/ghost-atproto-fullstack/frontend/src/app/login/page.tsx
+index 2b6b550..30152f3 100644
+--- a/ghost-atproto-fullstack/frontend/src/app/login/page.tsx
++++ b/ghost-atproto-fullstack/frontend/src/app/login/page.tsx
+@@ -1,7 +1,7 @@
+ 'use client';
+ 
+-import { useState } from 'react';
+-import { useRouter } from 'next/navigation';
++import { useState, useEffect } from 'react';
++import { useRouter, useSearchParams } from 'next/navigation';
+ import {
+   Box,
+   Container,
+@@ -12,16 +12,60 @@ import {
+   Alert,
+   Divider,
+   Stack,
++  Dialog,
++  DialogTitle,
++  DialogContent,
++  DialogActions,
+ } from '@mui/material';
+ import NextLink from 'next/link';
+ import { api } from '@/lib/api';
+ 
+ export default function LoginPage() {
+   const router = useRouter();
++  const searchParams = useSearchParams();
+   const [email, setEmail] = useState('');
+   const [password, setPassword] = useState('');
+   const [loading, setLoading] = useState(false);
+   const [error, setError] = useState('');
++  const [oauthConfig, setOauthConfig] = useState<any>(null);
++  
++  // Bluesky OAuth dialog
++  const [blueskyDialogOpen, setBlueskyDialogOpen] = useState(false);
++  const [blueskyHandle, setBlueskyHandle] = useState('');
++  const [blueskyPassword, setBlueskyPassword] = useState('');
++  const [blueskyLoading, setBlueskyLoading] = useState(false);
++
++  // Check for OAuth errors
++  useEffect(() => {
++    const oauthError = searchParams.get('error');
++    if (oauthError) {
++      setError(getOAuthErrorMessage(oauthError));
++    }
++  }, [searchParams]);
++
++  // Load OAuth config
++  useEffect(() => {
++    api.getOAuthConfig()
++      .then(setOauthConfig)
++      .catch((err) => {
++        console.error('Failed to load OAuth config:', err);
++        // Set default config if backend is not available
++        setOauthConfig({
++          google: { enabled: false, buttonText: 'Continue with Google' },
++          bluesky: { enabled: true, buttonText: 'Continue with Bluesky', requiresHandle: true, handlePlaceholder: 'your-handle.bsky.social' }
++        });
++      });
++  }, []);
++
++  const getOAuthErrorMessage = (error: string): string => {
++    const messages: Record<string, string> = {
++      'google_auth_failed': 'Google authentication failed. Please try again.',
++      'bluesky_auth_failed': 'Bluesky authentication failed. Please try again.',
++      'no_user': 'Authentication failed. No user found.',
++      'callback_failed': 'Authentication callback failed. Please try again.',
++    };
++    return messages[error] || 'Authentication failed. Please try again.';
++  };
+ 
+   const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+@@ -50,6 +94,42 @@ export default function LoginPage() {
+     }
+   };
+ 
++  const handleGoogleLogin = () => {
++    window.location.href = api.getGoogleOAuthUrl();
++  };
++
++  const handleBlueskyLogin = async () => {
++    if (!blueskyHandle.trim()) {
++      setError('Please enter your Bluesky handle');
++      return;
++    }
++    if (oauthConfig?.bluesky.requiresPassword && !blueskyPassword.trim()) {
++      setError('Please enter your Bluesky app password');
++      return;
++    }
++
++    setBlueskyLoading(true);
++    setError('');
++
++    try {
++      const res = await api.loginWithBluesky(blueskyHandle, blueskyPassword);
++      const role = res.user.role || 'USER';
++      setBlueskyDialogOpen(false);
++      
++      if (role === 'ADMIN') {
++        router.push('/dashboard/civic-actions');
++      } else if (role === 'AUTHOR') {
++        router.push('/bridge/wizard');
++      } else {
++        router.push('/dashboard');
++      }
++    } catch (err) {
++      const msg = err instanceof Error ? err.message : 'Failed to login with Bluesky';
++      setError(msg);
++      setBlueskyLoading(false);
++    }
++  };
++
+   return (
+     <Container maxWidth="sm">
+       <Box
+@@ -112,6 +192,64 @@ export default function LoginPage() {
+             </Button>
+           </form>
+ 
++          {oauthConfig && (oauthConfig.google.enabled || oauthConfig.bluesky.enabled) && (
++            <>
++              <Divider sx={{ my: 3 }}>
++                <Typography variant="body2" color="text.secondary">
++                  OR CONTINUE WITH
++                </Typography>
++              </Divider>
++
++              <Stack spacing={2}>
++                {oauthConfig.google.enabled && (
++                  <Button
++                    fullWidth
++                    variant="outlined"
++                    size="large"
++                    onClick={handleGoogleLogin}
++                    disabled={loading}
++                    sx={{ 
++                      py: 1.5, 
++                      fontSize: '1rem',
++                      borderColor: '#4285F4',
++                      color: '#4285F4',
++                      '&:hover': {
++                        borderColor: '#357AE8',
++                        backgroundColor: 'rgba(66, 133, 244, 0.04)',
++                      }
++                    }}
++                  >
++                    <Box component="span" sx={{ mr: 1 }}>🔵</Box>
++                    {oauthConfig.google.buttonText}
++                  </Button>
++                )}
++
++                {oauthConfig.bluesky.enabled && (
++                  <Button
++                    fullWidth
++                    variant="outlined"
++                    size="large"
++                    onClick={() => setBlueskyDialogOpen(true)}
++                    disabled={loading}
++                    sx={{ 
++                      py: 1.5, 
++                      fontSize: '1rem',
++                      borderColor: '#1185FE',
++                      color: '#1185FE',
++                      '&:hover': {
++                        borderColor: '#0E6FD9',
++                        backgroundColor: 'rgba(17, 133, 254, 0.04)',
++                      }
++                    }}
++                  >
++                    <Box component="span" sx={{ mr: 1 }}>🦋</Box>
++                    {oauthConfig.bluesky.buttonText}
++                  </Button>
++                )}
++              </Stack>
++            </>
++          )}
++
+           <Divider sx={{ my: 3 }}>
+             <Typography variant="body2" color="text.secondary">
+               OR
+@@ -136,6 +274,81 @@ export default function LoginPage() {
+           </Stack>
+         </Paper>
+       </Box>
++
++      {/* Bluesky Handle Dialog */}
++      <Dialog 
++        open={blueskyDialogOpen} 
++        onClose={() => !blueskyLoading && setBlueskyDialogOpen(false)}
++        maxWidth="sm"
++        fullWidth
++      >
++        <DialogTitle>
++          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
++            <span>🦋</span>
++            <span>Sign in with Bluesky</span>
++          </Box>
++        </DialogTitle>
++        <DialogContent>
++          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
++            {oauthConfig?.bluesky.requiresPassword 
++              ? 'Sign in with your Bluesky account. Your credentials will be securely saved for automatic syncing.'
++              : 'Enter your Bluesky handle. You\'ll be redirected to your server to authorize securely.'
++            }
++          </Typography>
++          <TextField
++            autoFocus
++            fullWidth
++            label="Bluesky Handle"
++            placeholder={oauthConfig?.bluesky.handlePlaceholder || 'your-handle.bsky.social'}
++            value={blueskyHandle}
++            onChange={(e) => setBlueskyHandle(e.target.value)}
++            disabled={blueskyLoading}
++            sx={{ mb: 2 }}
++            helperText="Example: alice.bsky.social"
++          />
++          {oauthConfig?.bluesky.requiresPassword && (
++            <TextField
++              fullWidth
++              type="password"
++              label="App Password"
++              placeholder={oauthConfig?.bluesky.passwordPlaceholder || 'xxxx-xxxx-xxxx-xxxx'}
++              value={blueskyPassword}
++              onChange={(e) => setBlueskyPassword(e.target.value)}
++              disabled={blueskyLoading}
++              onKeyDown={(e) => {
++                if (e.key === 'Enter' && blueskyHandle.trim() && blueskyPassword.trim()) {
++                  handleBlueskyLogin();
++                }
++              }}
++              helperText="Generate at bsky.app/settings/app-passwords"
++            />
++          )}
++          <Alert severity="info" sx={{ mt: 2 }}>
++            <Typography variant="caption">
++              <strong>Secure & Automatic!</strong>{' '}
++              {oauthConfig?.bluesky.requiresPassword 
++                ? 'Use an app password (not your main password). Once signed in, posts sync automatically to Bluesky.'
++                : 'You\'ll authorize on your own Bluesky server. Your password never leaves your server.'
++              }
++            </Typography>
++          </Alert>
++        </DialogContent>
++        <DialogActions sx={{ px: 3, pb: 3 }}>
++          <Button 
++            onClick={() => setBlueskyDialogOpen(false)} 
++            disabled={blueskyLoading}
++          >
++            Cancel
++          </Button>
++          <Button 
++            onClick={handleBlueskyLogin} 
++            variant="contained"
++            disabled={blueskyLoading || !blueskyHandle.trim() || (oauthConfig?.bluesky.requiresPassword && !blueskyPassword.trim())}
++          >
++            {blueskyLoading ? 'Signing in...' : 'Sign In'}
++          </Button>
++        </DialogActions>
++      </Dialog>
+     </Container>
+   );
+ }
+diff --git a/ghost-atproto-fullstack/frontend/src/lib/api.ts b/ghost-atproto-fullstack/frontend/src/lib/api.ts
+index 7f07dbd..1d4677e 100644
+--- a/ghost-atproto-fullstack/frontend/src/lib/api.ts
++++ b/ghost-atproto-fullstack/frontend/src/lib/api.ts
+@@ -12,7 +12,8 @@ export interface CivicActionDto {
+   imageUrl?: string | null;
+ }
+ 
+-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002';
++// Use 127.0.0.1 instead of localhost for AT Protocol OAuth (RFC 8252 requirement)
++const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
+ 
+ class ApiClient {
+   private token: string | null = null;
+@@ -94,6 +95,31 @@ class ApiClient {
+     }
+   }
+ 
++  // OAuth
++  async getOAuthConfig(): Promise<{
++    google: { enabled: boolean; buttonText: string };
++    bluesky: { enabled: boolean; buttonText: string; requiresHandle: boolean; requiresPassword?: boolean; handlePlaceholder: string; passwordPlaceholder?: string };
++  }> {
++    return this.request('/api/auth/oauth/config');
++  }
++
++  async loginWithBluesky(handle: string, password: string): Promise<LoginResponse> {
++    const data = await this.request<LoginResponse>('/api/auth/bluesky', {
++      method: 'POST',
++      body: JSON.stringify({ handle, password }),
++    });
++    this.token = data.token;
++    if (typeof window !== 'undefined') {
++      localStorage.setItem('token', data.token);
++    }
++    return data;
++  }
++
++  // For Google OAuth, just redirect to the backend route
++  getGoogleOAuthUrl(): string {
++    return `${API_BASE}/api/auth/google`;
++  }
++
+   async getMe(): Promise<User> {
+     return this.request<User>('/api/auth/me');
+   }

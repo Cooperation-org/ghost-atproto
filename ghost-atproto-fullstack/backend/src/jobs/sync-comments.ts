@@ -1,71 +1,117 @@
-import { syncAllComments } from '../services/comment-sync';
-import { createShimClient } from '../lib/shim-client';
+import { PrismaClient } from '@prisma/client';
+import { syncCommentsForPost } from '../services/comment-sync';
+import { ShimClient } from '../lib/shim-client';
+
+const prisma = new PrismaClient();
 
 /**
- * Sync all Bluesky comments to Ghost
+ * Sync Bluesky comments to Ghost for all users with configured shims
  * This job runs periodically to fetch new replies from Bluesky
- * and sync them to Ghost via the comments shim.
+ * and sync them to each user's Ghost instance via their configured shim.
  */
 export async function runCommentSync(): Promise<{
   success: boolean;
+  usersProcessed: number;
   postsProcessed: number;
   totalNewComments: number;
   totalErrors: number;
 }> {
   console.log('🔄 Starting scheduled comment sync...');
 
-  // Check if shim is configured
-  if (!process.env.SHIM_URL || !process.env.SHIM_SHARED_SECRET) {
-    console.log('⚠️ Comment sync skipped: SHIM_URL and SHIM_SHARED_SECRET not configured');
-    return {
-      success: false,
-      postsProcessed: 0,
-      totalNewComments: 0,
-      totalErrors: 0,
-    };
-  }
+  let usersProcessed = 0;
+  let postsProcessed = 0;
+  let totalNewComments = 0;
+  let totalErrors = 0;
 
   try {
-    const shimClient = createShimClient();
+    // Get all users who have shim configured
+    const users = await prisma.user.findMany({
+      where: {
+        shimUrl: { not: null },
+        shimSecret: { not: null },
+      },
+      select: {
+        id: true,
+        email: true,
+        shimUrl: true,
+        shimSecret: true,
+      },
+    });
 
-    // Check shim health before syncing
-    const shimHealthy = await shimClient.healthCheck();
-    if (!shimHealthy) {
-      console.error('❌ Comment sync failed: Shim is not healthy');
-      return {
-        success: false,
-        postsProcessed: 0,
-        totalNewComments: 0,
-        totalErrors: 0,
-      };
+    if (users.length === 0) {
+      console.log('⚠️ No users have shim configured, skipping sync');
+      return { success: true, usersProcessed: 0, postsProcessed: 0, totalNewComments: 0, totalErrors: 0 };
     }
 
-    // Run the sync
-    const results = await syncAllComments(shimClient);
+    console.log(`📋 Found ${users.length} users with shim configured`);
 
-    const totalNew = results.reduce((sum, r) => sum + r.newComments, 0);
-    const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);
+    for (const user of users) {
+      try {
+        const shimClient = new ShimClient({
+          shimUrl: user.shimUrl!,
+          sharedSecret: user.shimSecret!,
+        });
+
+        // Check shim health
+        const healthy = await shimClient.healthCheck();
+        if (!healthy) {
+          console.log(`⚠️ Shim not healthy for user ${user.email}, skipping`);
+          totalErrors++;
+          continue;
+        }
+
+        // Get posts for this user that have been published to Bluesky
+        const posts = await prisma.post.findMany({
+          where: {
+            userId: user.id,
+            atprotoUri: { not: null },
+            ghostId: { not: null },
+          },
+          select: { id: true, title: true },
+        });
+
+        for (const post of posts) {
+          try {
+            const result = await syncCommentsForPost(post.id, shimClient);
+            postsProcessed++;
+            totalNewComments += result.newComments;
+            totalErrors += result.errors.length;
+          } catch (err) {
+            console.error(`Failed to sync post ${post.id}:`, err);
+            totalErrors++;
+          }
+        }
+
+        usersProcessed++;
+      } catch (err) {
+        console.error(`Failed to sync for user ${user.email}:`, err);
+        totalErrors++;
+      }
+    }
 
     console.log(`✅ Comment sync completed:`);
-    console.log(`   📝 Posts processed: ${results.length}`);
-    console.log(`   💬 New comments synced: ${totalNew}`);
+    console.log(`   👤 Users processed: ${usersProcessed}`);
+    console.log(`   📝 Posts processed: ${postsProcessed}`);
+    console.log(`   💬 New comments synced: ${totalNewComments}`);
     if (totalErrors > 0) {
       console.log(`   ⚠️ Errors: ${totalErrors}`);
     }
 
     return {
       success: true,
-      postsProcessed: results.length,
-      totalNewComments: totalNew,
+      usersProcessed,
+      postsProcessed,
+      totalNewComments,
       totalErrors,
     };
   } catch (error) {
     console.error('❌ Comment sync failed:', error);
     return {
       success: false,
-      postsProcessed: 0,
-      totalNewComments: 0,
-      totalErrors: 1,
+      usersProcessed,
+      postsProcessed,
+      totalNewComments,
+      totalErrors: totalErrors + 1,
     };
   }
 }

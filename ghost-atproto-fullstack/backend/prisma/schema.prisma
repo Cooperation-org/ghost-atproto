@@ -21,6 +21,8 @@ model User {
   ghostWebhookId          String?          @map("ghost_webhook_id")
   ghostContentApiKey      String?          @map("ghost_content_api_key")
   blueskyMemberId         String?          @map("bluesky_member_id")
+  shimUrl                 String?          @map("shim_url")
+  shimSecret              String?          @map("shim_secret")
   password                String
   role                    Role             @default(USER)
   autoSync                Boolean          @default(true) @map("auto_sync")

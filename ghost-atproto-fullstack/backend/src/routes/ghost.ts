@@ -2,8 +2,9 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import { ensureBlueskyMember } from '../lib/ghost-admin';
-import { syncCommentsForPost, syncAllComments } from '../services/comment-sync';
-import { createShimClient, ShimClient } from '../lib/shim-client';
+import { syncCommentsForPost } from '../services/comment-sync';
+import { ShimClient } from '../lib/shim-client';
+import { runCommentSync } from '../jobs/sync-comments';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -118,29 +119,65 @@ router.get('/bluesky-member/status', authenticateToken, async (req, res) => {
 });
 
 /**
+ * Configure shim URL and secret for comment sync
+ * POST /api/ghost/shim/config
+ */
+router.post('/shim/config', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { shimUrl, shimSecret } = req.body;
+
+    if (!shimUrl || !shimSecret) {
+      return res.status(400).json({ error: 'shimUrl and shimSecret are required' });
+    }
+
+    if (shimSecret.length < 32) {
+      return res.status(400).json({ error: 'shimSecret must be at least 32 characters' });
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { shimUrl, shimSecret },
+    });
+
+    return res.json({ success: true, message: 'Shim configuration saved' });
+  } catch (error) {
+    console.error('Shim config error:', error);
+    return res.status(500).json({ error: 'Failed to save shim configuration' });
+  }
+});
+
+/**
  * Check if shim is configured and healthy
  * GET /api/ghost/shim/status
  */
 router.get('/shim/status', authenticateToken, async (req, res) => {
   try {
-    const shimUrl = process.env.SHIM_URL;
-    const shimSecret = process.env.SHIM_SHARED_SECRET;
+    const userId = (req as any).userId;
 
-    if (!shimUrl || !shimSecret) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { shimUrl: true, shimSecret: true },
+    });
+
+    if (!user?.shimUrl || !user?.shimSecret) {
       return res.json({
         configured: false,
         healthy: false,
-        message: 'SHIM_URL and SHIM_SHARED_SECRET not configured',
+        message: 'Shim URL and secret not configured',
       });
     }
 
-    const shimClient = createShimClient();
+    const shimClient = new ShimClient({
+      shimUrl: user.shimUrl,
+      sharedSecret: user.shimSecret,
+    });
     const healthy = await shimClient.healthCheck();
 
     return res.json({
       configured: true,
       healthy,
-      shimUrl,
+      shimUrl: user.shimUrl,
     });
   } catch (error) {
     console.error('Shim status error:', error);
@@ -158,6 +195,18 @@ router.post('/sync-comments/:postId', authenticateToken, async (req, res) => {
   try {
     const userId = (req as any).userId;
     const { postId } = req.params;
+
+    // Get user's shim config
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { shimUrl: true, shimSecret: true },
+    });
+
+    if (!user?.shimUrl || !user?.shimSecret) {
+      return res.status(400).json({
+        error: 'Shim not configured. Go to Settings to configure your comment sync.',
+      });
+    }
 
     // Verify user owns this post
     const post = await prisma.post.findUnique({
@@ -181,14 +230,10 @@ router.post('/sync-comments/:postId', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Post has no Ghost ID' });
     }
 
-    // Check shim configuration
-    if (!process.env.SHIM_URL || !process.env.SHIM_SHARED_SECRET) {
-      return res.status(400).json({
-        error: 'Comment sync not configured. Set SHIM_URL and SHIM_SHARED_SECRET.',
-      });
-    }
-
-    const shimClient = createShimClient();
+    const shimClient = new ShimClient({
+      shimUrl: user.shimUrl,
+      sharedSecret: user.shimSecret,
+    });
 
     // Verify shim is healthy
     const shimHealthy = await shimClient.healthCheck();
@@ -215,7 +260,7 @@ router.post('/sync-comments/:postId', authenticateToken, async (req, res) => {
 });
 
 /**
- * Sync comments for all eligible posts
+ * Sync comments for all users (admin only)
  * POST /api/ghost/sync-comments
  */
 router.post('/sync-comments', authenticateToken, async (req, res) => {
@@ -232,33 +277,15 @@ router.post('/sync-comments', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Admin access required for bulk sync' });
     }
 
-    // Check shim configuration
-    if (!process.env.SHIM_URL || !process.env.SHIM_SHARED_SECRET) {
-      return res.status(400).json({
-        error: 'Comment sync not configured. Set SHIM_URL and SHIM_SHARED_SECRET.',
-      });
-    }
-
-    const shimClient = createShimClient();
-
-    // Verify shim is healthy
-    const shimHealthy = await shimClient.healthCheck();
-    if (!shimHealthy) {
-      return res.status(503).json({ error: 'Comment shim is not available' });
-    }
-
-    // Sync all comments
-    const results = await syncAllComments(shimClient);
-
-    const totalNew = results.reduce((sum, r) => sum + r.newComments, 0);
-    const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);
+    // Run the sync job for all users
+    const result = await runCommentSync();
 
     return res.json({
-      success: true,
-      postsProcessed: results.length,
-      totalNewComments: totalNew,
-      totalErrors,
-      results,
+      success: result.success,
+      usersProcessed: result.usersProcessed,
+      postsProcessed: result.postsProcessed,
+      totalNewComments: result.totalNewComments,
+      totalErrors: result.totalErrors,
     });
   } catch (error) {
     console.error('Sync all comments error:', error);
