@@ -37,6 +37,10 @@ export default function ArticlesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Sync state
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+
   // Bluesky publish dialog state
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -66,6 +70,25 @@ export default function ArticlesPage() {
     api.extractTokenFromUrl();
     loadData();
   }, [router]);
+
+  const handleSyncFromGhost = async () => {
+    setSyncing(true);
+    setSyncMessage('');
+    try {
+      const result = await api.syncPostsFromGhost();
+      setSyncMessage(`✓ ${result.message} (${result.newPosts} new, ${result.updatedPosts} updated)`);
+      // Reload posts after sync
+      await loadData();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setSyncMessage(`✗ ${err.message}`);
+      } else {
+        setSyncMessage('✗ Failed to sync from Ghost. Check your Ghost URL and API key in settings.');
+      }
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Open publish dialog with pre-filled content
   const handleOpenPublishDialog = (post: Post) => {
@@ -138,11 +161,27 @@ export default function ArticlesPage() {
 
   return (
     <DashboardLayout>
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
           Articles
         </Typography>
+        <Button
+          variant="contained"
+          onClick={handleSyncFromGhost}
+          disabled={syncing}
+          startIcon={syncing ? <CircularProgress size={16} color="inherit" /> : <CloudIcon />}
+          sx={{ textTransform: 'none' }}
+        >
+          {syncing ? 'Syncing...' : 'Sync from Ghost'}
+        </Button>
       </Box>
+
+      {/* Show sync message */}
+      {syncMessage && (
+        <Alert severity={syncMessage.startsWith('✓') ? 'success' : 'error'} sx={{ mb: 3 }} onClose={() => setSyncMessage('')}>
+          {syncMessage}
+        </Alert>
+      )}
 
       {/* Show error if present */}
       {error && (

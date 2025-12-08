@@ -617,6 +617,17 @@ class ApiClient {
     });
   }
 
+  async syncPostsFromGhost(): Promise<{
+    success: boolean;
+    message: string;
+    newPosts: number;
+    updatedPosts: number;
+  }> {
+    return this.request('/api/ghost/sync-posts', {
+      method: 'POST',
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Civic Events (Mobilize API)
   // ---------------------------------------------------------------------------
