@@ -123,8 +123,31 @@ export function createCommentsRouter(config: Config, db: DbConnection): Router {
       // Return success
       res.status(201).json({ comment_id: commentId });
     } catch (err) {
-      console.error('Error creating comment:', err);
-      res.status(500).json({ error: 'Internal server error' });
+      const error = err as Error & { code?: string; errno?: number; sqlMessage?: string };
+
+      // Log full error
+      console.error('Error creating comment:', error.message);
+      if (error.code) console.error('  Code:', error.code);
+      if (error.sqlMessage) console.error('  SQL:', error.sqlMessage);
+
+      // Return useful error to client
+      let errorMessage = 'Internal server error';
+
+      if (error.code === 'ECONNREFUSED') {
+        errorMessage = 'Database connection refused - check GHOST_DB_CONNECTION';
+      } else if (error.code === 'ER_ACCESS_DENIED_ERROR') {
+        errorMessage = 'Database access denied - check credentials';
+      } else if (error.code === 'ER_NO_SUCH_TABLE') {
+        errorMessage = 'Comments table not found - is this a Ghost database?';
+      } else if (error.code === 'ER_NO_REFERENCED_ROW' || error.code === 'ER_NO_REFERENCED_ROW_2') {
+        errorMessage = 'Post ID not found in Ghost database';
+      } else if (error.sqlMessage) {
+        errorMessage = `Database error: ${error.sqlMessage}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      res.status(500).json({ error: errorMessage });
     }
   });
 

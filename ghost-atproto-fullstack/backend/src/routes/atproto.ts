@@ -1,19 +1,54 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
 import { publishToBluesky } from '../lib/atproto';
 import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-// Publish post to ATProto/Bluesky
-router.post('/publish', async (req, res) => {
+// Auth middleware for atproto routes
+function authenticateToken(req: any, res: any, next: any) {
+  const token = req.cookies?.token || req.header('Authorization')?.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
   try {
-    const { postId } = req.body;
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    req.userId = decoded.userId;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+// Publish post to ATProto/Bluesky (requires authentication)
+router.post('/publish', authenticateToken, async (req: any, res) => {
+  try {
+    const userId = req.userId;
+    const { postId, customText } = req.body;
 
     if (!postId) {
-      return res.status(400).json({ 
-        error: 'Post ID is required' 
+      return res.status(400).json({
+        error: 'Post ID is required'
+      });
+    }
+
+    // Get the authenticated user with their Bluesky credentials
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    if (!user.blueskyHandle || !user.blueskyPassword) {
+      return res.status(400).json({
+        error: 'Bluesky credentials not configured. Please add your Bluesky handle and app password in Settings.'
       });
     }
 
@@ -24,43 +59,53 @@ router.post('/publish', async (req, res) => {
     });
 
     if (!post) {
-      return res.status(404).json({ 
-        error: 'Post not found' 
+      return res.status(404).json({
+        error: 'Post not found'
+      });
+    }
+
+    // Verify the post belongs to this user
+    if (post.userId !== userId) {
+      return res.status(403).json({
+        error: 'You can only publish your own posts'
       });
     }
 
     if (post.status !== 'published') {
-      return res.status(400).json({ 
-        error: 'Only published posts can be synced to ATProto' 
+      return res.status(400).json({
+        error: 'Only published posts can be synced to ATProto'
       });
     }
 
-    // Format content for Bluesky
-    let blueskyContent = post.title;
-    
-    // Add content preview if available
-    if (post.content) {
-      const textContent = post.content.replace(/<[^>]*>/g, ''); // Strip HTML
-      const preview = textContent.substring(0, 200);
-      if (preview.length < textContent.length) {
-        blueskyContent += `\n\n${preview}...`;
-      } else {
-        blueskyContent += `\n\n${preview}`;
-      }
+    // Check if already posted
+    if (post.atprotoUri) {
+      return res.status(400).json({
+        error: 'Post has already been published to Bluesky',
+        atprotoUri: post.atprotoUri
+      });
     }
 
-    // Add link to original post if available
-    if (post.ghostUrl) {
-      blueskyContent += `\n\nRead more: ${post.ghostUrl}`;
+    // Use the customText directly - user has full control
+    const blueskyContent = customText;
+
+    if (!blueskyContent || blueskyContent.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Post content is required'
+      });
     }
 
-    // Ensure content doesn't exceed Bluesky's character limit (300 chars)
-    if (blueskyContent.length > 280) {
-      blueskyContent = blueskyContent.substring(0, 277) + '...';
+    // Bluesky character limit is 300
+    if (blueskyContent.length > 300) {
+      return res.status(400).json({
+        error: `Content exceeds Bluesky's 300 character limit (currently ${blueskyContent.length} characters)`
+      });
     }
 
-    // Publish using ATProto
-    const atprotoResult = await publishToBluesky(blueskyContent);
+    // Publish using ATProto with user's credentials
+    const atprotoResult = await publishToBluesky(blueskyContent, {
+      handle: user.blueskyHandle,
+      password: user.blueskyPassword
+    });
 
     // Update sync_logs
     await prisma.syncLog.create({

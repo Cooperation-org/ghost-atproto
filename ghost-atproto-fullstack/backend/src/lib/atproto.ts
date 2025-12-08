@@ -28,16 +28,25 @@ export interface PostThread {
   replies: PostReply[];
 }
 
-export async function publishToBluesky(content: string): Promise<{ uri: string; cid: string }> {
-  const agent = new AtpAgent({ 
-    service: process.env.BLUESKY_SERVICE_URL || 'https://bsky.social' 
+export interface BlueskyCredentials {
+  handle: string;
+  password: string;
+}
+
+export async function publishToBluesky(
+  content: string,
+  credentials?: BlueskyCredentials
+): Promise<{ uri: string; cid: string }> {
+  const agent = new AtpAgent({
+    service: process.env.BLUESKY_SERVICE_URL || 'https://bsky.social'
   });
-  
-  const identifier = process.env.BLUESKY_IDENTIFIER ;
-  const password = process.env.BLUESKY_APP_PASSWORD ;
+
+  // Use provided credentials or fall back to env vars
+  const identifier = credentials?.handle || process.env.BLUESKY_IDENTIFIER;
+  const password = credentials?.password || process.env.BLUESKY_APP_PASSWORD;
 
   if (!identifier || !password) {
-    throw new Error('Bluesky credentials not configured');
+    throw new Error('Bluesky credentials not configured. Please add your Bluesky handle and app password in Settings.');
   }
 
   try {
@@ -45,7 +54,7 @@ export async function publishToBluesky(content: string): Promise<{ uri: string; 
       identifier,
       password
     });
-    
+
     const response = await agent.post({
       text: content,
       createdAt: new Date().toISOString()

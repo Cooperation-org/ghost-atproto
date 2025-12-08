@@ -49,7 +49,6 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
     } else if (cleanPath === '/dashboard/civic-actions' || cleanPath.startsWith('/dashboard/civic-actions/')) {
       setCurrentTab('/dashboard/civic-actions');
     } else if (cleanPath === '/dashboard/settings' || cleanPath.startsWith('/dashboard/settings/')) {
-      // Settings page - don't highlight any tab
       setCurrentTab(false);
     } else {
       // Default to civic actions for public view

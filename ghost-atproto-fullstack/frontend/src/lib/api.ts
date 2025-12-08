@@ -453,6 +453,21 @@ class ApiClient {
     });
   }
 
+  // Bluesky Publishing
+  async publishToBluesky(postId: string, customText: string): Promise<{
+    success: boolean;
+    message: string;
+    postId: string;
+    title: string;
+    atprotoUri: string;
+    atprotoCid: string;
+  }> {
+    return this.request('/api/atproto/publish', {
+      method: 'POST',
+      body: JSON.stringify({ postId, customText }),
+    });
+  }
+
   // Civic Events (Mobilize API)
   async getCivicEvents(params?: { 
     cursor?: string; 
