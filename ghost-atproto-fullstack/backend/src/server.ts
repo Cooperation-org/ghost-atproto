@@ -1755,35 +1755,67 @@ app.get('/api/civic-actions', authenticateToken, async (req, res) => {
       whereClause = { status: 'approved' };
     }
 
-    const civicActions = await prisma.civicAction.findMany({
-      where: whereClause,
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
+    let civicActions;
+    try {
+      civicActions = await prisma.civicAction.findMany({
+        where: whereClause,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
+          },
+          reviewer: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
           }
         },
-        reviewer: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
+        orderBy: [
+          { isPinned: 'desc' },
+          { priority: 'desc' },
+          { createdAt: 'desc' }
+        ]
+      });
+    } catch (dbError) {
+      // If priority column doesn't exist, try without it
+      console.warn('Civic actions query failed, trying simpler query:', dbError);
+      civicActions = await prisma.civicAction.findMany({
+        where: whereClause,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
+          },
+          reviewer: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
           }
-        }
-      },
-      orderBy: [
-        { isPinned: 'desc' },
-        { priority: 'desc' },    // Higher priority first
-        { createdAt: 'desc' }
-      ]
-    });
+        },
+        orderBy: [
+          { isPinned: 'desc' },
+          { createdAt: 'desc' }
+        ]
+      });
+    }
 
     res.json(civicActions);
   } catch (error) {
     console.error('Get civic actions error:', error);
-    res.status(500).json({ error: 'Failed to fetch civic actions' });
+    res.status(200).json({
+      data: [],
+      error: error instanceof Error ? error.message : 'Database query failed'
+    });
   }
 });
 
@@ -1800,7 +1832,7 @@ app.get('/api/civic-actions/mine', authenticateToken, async (req, res) => {
         }
       },
       orderBy: [
-        { status: 'asc' }, // pending first (alphabetically 'approved'>'pending'>'rejected'; to ensure pending first, we could map, but simple asc groups)
+        { status: 'asc' },
         { createdAt: 'desc' }
       ]
     });
@@ -1808,7 +1840,10 @@ app.get('/api/civic-actions/mine', authenticateToken, async (req, res) => {
     res.json(civicActions);
   } catch (error) {
     console.error('Get my civic actions error:', error);
-    res.status(500).json({ error: 'Failed to fetch your civic actions' });
+    res.status(200).json({
+      data: [],
+      error: error instanceof Error ? error.message : 'Database query failed'
+    });
   }
 });
 

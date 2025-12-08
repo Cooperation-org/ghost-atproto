@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import NextLink from 'next/link';
 import {
   Box,
   AppBar,
@@ -47,6 +48,9 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
       setCurrentTab('/dashboard/articles');
     } else if (cleanPath === '/dashboard/civic-actions' || cleanPath.startsWith('/dashboard/civic-actions/')) {
       setCurrentTab('/dashboard/civic-actions');
+    } else if (cleanPath === '/dashboard/settings' || cleanPath.startsWith('/dashboard/settings/')) {
+      // Settings page - don't highlight any tab
+      setCurrentTab(false);
     } else {
       // Default to civic actions for public view
       setCurrentTab('/dashboard/civic-actions');
@@ -67,11 +71,6 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
 
     loadUser();
   }, []);
-
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: string) => {
-    setCurrentTab(newValue);
-    router.push(newValue);
-  };
 
   const handleProfileClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -203,9 +202,8 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
         boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
       }}>
         <Box sx={{ maxWidth: '1400px', mx: 'auto', px: 3 }}>
-          <Tabs 
-            value={currentTab} 
-            onChange={handleTabChange}
+          <Tabs
+            value={currentTab}
             sx={{
               '& .MuiTab-root': {
                 textTransform: 'none',
@@ -215,23 +213,29 @@ export function DashboardLayout({ children }: { readonly children: React.ReactNo
               }
             }}
           >
-            {user && (
-              <>
-                <Tab
-                  icon={<BarChartIcon />}
-                  iconPosition="start"
-                  label="Your Impact"
-                  value="/dashboard"
-                />
-                <Tab
-                  icon={<ArticleIcon />}
-                  iconPosition="start"
-                  label="Articles"
-                  value="/dashboard/articles"
-                />
-              </>
-            )}
+            {user && [
+              <Tab
+                key="impact"
+                component={NextLink}
+                href="/dashboard"
+                icon={<BarChartIcon />}
+                iconPosition="start"
+                label="Your Impact"
+                value="/dashboard"
+              />,
+              <Tab
+                key="articles"
+                component={NextLink}
+                href="/dashboard/articles"
+                icon={<ArticleIcon />}
+                iconPosition="start"
+                label="Articles"
+                value="/dashboard/articles"
+              />
+            ]}
             <Tab
+              component={NextLink}
+              href="/dashboard/civic-actions"
               icon={<CampaignIcon />}
               iconPosition="start"
               label="Civic Actions"
