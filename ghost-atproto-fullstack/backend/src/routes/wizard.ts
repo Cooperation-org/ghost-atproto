@@ -3,27 +3,11 @@ import { PrismaClient } from '@prisma/client';
 import { BskyAgent } from '@atproto/api';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
+import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET;
-
-// Middleware to authenticate token
-function authenticateToken(req: any, res: any, next: any) {
-  const token = req.cookies?.token || req.header('Authorization')?.replace('Bearer ', '');
-
-  if (!token) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    req.userId = decoded.userId;
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-}
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 /**
  * Validate Ghost site connection

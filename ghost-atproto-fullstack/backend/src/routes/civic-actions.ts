@@ -448,10 +448,10 @@ router.post('/:id/toggle-pin', authenticateToken, requireAdmin, async (req: Requ
 });
 
 /**
- * POST /api/civic-actions/:id/priority
+ * POST /api/civic-actions/:id/set-priority
  * Set priority (admin only)
  */
-router.post('/:id/priority', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post('/:id/set-priority', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { priority } = req.body;
@@ -465,13 +465,39 @@ router.post('/:id/priority', authenticateToken, requireAdmin, async (req: Reques
       data: { priority },
     });
 
-    res.json({
-      id: action.id,
-      title: action.title,
-      priority: action.priority,
-    });
+    res.json(action);
   } catch (error) {
-    handleError(res, error, 'Failed to set priority', 'civic-actions/priority');
+    handleError(res, error, 'Failed to set priority', 'civic-actions/set-priority');
+  }
+});
+
+/**
+ * POST /api/civic-actions/:id/recommend
+ * Mark as recommended by admin
+ */
+router.post('/:id/recommend', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const authReq = req as AuthRequest;
+
+    const action = await prisma.civicAction.update({
+      where: { id },
+      data: {
+        recommendedBy: authReq.user.id,
+      },
+      include: {
+        recommender: {
+          select: {
+            id: true,
+            name: true,
+          }
+        }
+      }
+    });
+
+    res.json(action);
+  } catch (error) {
+    handleError(res, error, 'Failed to recommend civic action', 'civic-actions/recommend');
   }
 });
 

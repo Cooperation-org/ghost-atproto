@@ -25,7 +25,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import SyncIcon from '@mui/icons-material/Sync';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { api } from '@/lib/api';
+import { PageState } from '@/components/PageState';
+import { api, ApiError } from '@/lib/api';
 import { User } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 
@@ -33,6 +34,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<Error | null>(null);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -54,33 +56,38 @@ export default function SettingsPage() {
     checking: boolean;
   }>({ configured: false, healthy: false, checking: false });
 
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const userData = await api.getMe();
-        setUser(userData);
-        setFormData({
-          name: userData.name || '',
-          ghostUrl: userData.ghostUrl || '',
-          ghostApiKey: userData.ghostApiKey || '',
-          ghostContentApiKey: userData.ghostContentApiKey || '',
-          blueskyHandle: userData.blueskyHandle || '',
-          blueskyPassword: userData.blueskyPassword || '',
-          shimUrl: userData.shimUrl || '',
-          shimSecret: userData.shimSecret || '',
-        });
+  const loadUser = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const userData = await api.getMe();
+      setUser(userData);
+      setFormData({
+        name: userData.name || '',
+        ghostUrl: userData.ghostUrl || '',
+        ghostApiKey: userData.ghostApiKey || '',
+        ghostContentApiKey: userData.ghostContentApiKey || '',
+        blueskyHandle: userData.blueskyHandle || '',
+        blueskyPassword: userData.blueskyPassword || '',
+        shimUrl: userData.shimUrl || '',
+        shimSecret: userData.shimSecret || '',
+      });
 
-        // Check shim status if configured
-        if (userData.shimUrl && userData.shimSecret) {
-          checkShimStatus();
-        }
-      } catch {
-        setError('Failed to load user data');
-      } finally {
-        setLoading(false);
+      if (userData.shimUrl && userData.shimSecret) {
+        checkShimStatus();
       }
-    };
+    } catch (err) {
+      if (err instanceof ApiError && err.isUnauthorized()) {
+        router.push('/login');
+        return;
+      }
+      setLoadError(err instanceof Error ? err : new Error('Failed to load user data'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadUser();
   }, []);
 
@@ -163,12 +170,17 @@ export default function SettingsPage() {
     }
   };
 
-  if (loading) {
+  if (loading || loadError) {
     return (
       <DashboardLayout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-          <CircularProgress />
-        </Box>
+        <PageState
+          loading={loading}
+          error={loadError}
+          onRetry={loadUser}
+          loadingText="Loading settings..."
+        >
+          <div />
+        </PageState>
       </DashboardLayout>
     );
   }

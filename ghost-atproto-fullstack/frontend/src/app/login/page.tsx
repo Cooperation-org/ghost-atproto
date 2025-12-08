@@ -18,7 +18,7 @@ import {
   DialogActions,
 } from '@mui/material';
 import NextLink from 'next/link';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 
 function LoginPageContent() {
   const router = useRouter();

@@ -34,7 +34,8 @@ import CampaignIcon from '@mui/icons-material/Campaign';
 import CloudIcon from '@mui/icons-material/Cloud';
 import SearchIcon from '@mui/icons-material/Search';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { api } from '@/lib/api';
+import { PageState, InlineError } from '@/components/PageState';
+import { api, ApiError } from '@/lib/api';
 
 interface EventTimeslot {
   start_date: number;
@@ -88,6 +89,7 @@ export default function CivicActionsPage() {
   const router = useRouter();
   const [events, setEvents] = useState<CivicEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [imageErrors, setImageErrors] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -163,13 +165,13 @@ export default function CivicActionsPage() {
         setLoadingMore(true);
       } else {
         setLoading(true);
+        setError(null);
       }
 
       const response = await api.getCivicEvents({ cursor }) as unknown as CivicEventsResponse;
-      
+
       if (append) {
         setAllEvents(prev => {
-          // Filter out duplicate events by ID
           const existingIds = new Set(prev.map(event => event.id));
           const newEvents = response.data.filter(event => !existingIds.has(event.id));
           return [...prev, ...newEvents];
@@ -177,16 +179,23 @@ export default function CivicActionsPage() {
       } else {
         setAllEvents(response.data);
       }
-      
+
       setNextCursor(response.next);
       setHasMore(!!response.next);
-    } catch (error) {
-      console.error('Failed to load civic events:', error);
+    } catch (err) {
+      console.error('Failed to load civic events:', err);
+      if (!append) {
+        if (err instanceof ApiError && err.isUnauthorized()) {
+          router.push('/login');
+          return;
+        }
+        setError(err instanceof Error ? err : new Error('Failed to load civic events'));
+      }
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, []);
+  }, [router]);
 
   const loadMoreEvents = useCallback(() => {
     if (nextCursor && !loadingMore) {
@@ -477,16 +486,6 @@ export default function CivicActionsPage() {
     setImageErrors(prev => new Set(prev).add(eventId));
   };
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-          <CircularProgress />
-        </Box>
-      </DashboardLayout>
-    );
-  }
-
   return (
     <DashboardLayout>
       <Box sx={{ mb: 4 }}>
@@ -497,6 +496,13 @@ export default function CivicActionsPage() {
           Discover and participate in civic engagement events in your community
         </Typography>
       </Box>
+
+      <PageState
+        loading={loading}
+        error={error}
+        onRetry={() => loadEvents()}
+        loadingText="Loading civic actions..."
+      >
 
       {/* Search and Filter Bar */}
       <Paper
@@ -1722,9 +1728,9 @@ export default function CivicActionsPage() {
 
           {/* No More Events Message */}
           {!hasMore && events.length > 0 && (
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
+            <Box sx={{
+              display: 'flex',
+              justifyContent: 'center',
               mt: 4,
               mb: 2,
             }}>
@@ -1735,6 +1741,7 @@ export default function CivicActionsPage() {
           )}
         </>
       )}
+      </PageState>
     </DashboardLayout>
   );
 }

@@ -1,29 +1,11 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import jwt from 'jsonwebtoken';
 import { publishToBluesky } from '../lib/atproto';
 import bcrypt from 'bcryptjs';
+import { authenticateToken, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET;
-
-// Auth middleware for atproto routes
-function authenticateToken(req: any, res: any, next: any) {
-  const token = req.cookies?.token || req.header('Authorization')?.replace('Bearer ', '');
-
-  if (!token) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    req.userId = decoded.userId;
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-}
 
 // Publish post to ATProto/Bluesky (requires authentication)
 router.post('/publish', authenticateToken, async (req: any, res) => {

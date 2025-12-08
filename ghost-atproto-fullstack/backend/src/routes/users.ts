@@ -130,7 +130,7 @@ router.get('/:id', async (req: Request, res: Response) => {
           select: {
             posts: true,
             syncLogs: true,
-            civicActions: true,
+            submittedCivicActions: true,
             engagements: true,
           },
         },

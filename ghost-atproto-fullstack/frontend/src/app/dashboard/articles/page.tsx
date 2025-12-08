@@ -27,13 +27,15 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloudIcon from '@mui/icons-material/Cloud';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { api } from '@/lib/api';
+import { PageState } from '@/components/PageState';
+import { api, ApiError } from '@/lib/api';
 import { Post } from '@/lib/types';
 
 export default function ArticlesPage() {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   // Bluesky publish dialog state
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
@@ -43,25 +45,25 @@ export default function ArticlesPage() {
   const [publishError, setPublishError] = useState('');
   const [publishSuccess, setPublishSuccess] = useState('');
 
-  useEffect(() => {
-    // Extract token from URL if present (from OAuth redirect)
-    api.extractTokenFromUrl();
-
-    const loadData = async () => {
-      try {
-        const postsData = await api.getAllPosts(); // Get ALL posts from ALL users
-        setPosts(postsData);
-      } catch (error) {
-        console.error('Failed to load dashboard data:', error);
-        // If unauthorized, redirect to login
-        if (error instanceof Error && error.message.includes('401')) {
-          router.push('/login');
-        }
-      } finally {
-        setLoading(false);
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const postsData = await api.getAllPosts();
+      setPosts(postsData);
+    } catch (err) {
+      if (err instanceof ApiError && err.isUnauthorized()) {
+        router.push('/login');
+        return;
       }
-    };
+      setError(err instanceof Error ? err : new Error('Failed to load articles'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    api.extractTokenFromUrl();
     loadData();
   }, [router]);
 
@@ -134,16 +136,6 @@ export default function ArticlesPage() {
     return atUri;
   };
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-          <CircularProgress />
-        </Box>
-      </DashboardLayout>
-    );
-  }
-
   return (
     <DashboardLayout>
       <Box sx={{ mb: 4 }}>
@@ -152,41 +144,15 @@ export default function ArticlesPage() {
         </Typography>
       </Box>
 
-      {/* Articles Grid */}
-      {posts.length === 0 ? (
-        <Paper
-          sx={{
-            p: 8,
-            textAlign: 'center',
-            borderRadius: 3,
-            border: '2px dashed',
-            borderColor: 'grey.300',
-            bgcolor: 'grey.50'
-          }}
-        >
-          <Box
-            sx={{
-              width: 80,
-              height: 80,
-              borderRadius: '50%',
-              bgcolor: 'primary.light',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mx: 'auto',
-              mb: 3
-            }}
-          >
-            <ArticleIcon sx={{ fontSize: 40, color: 'primary.main' }} />
-          </Box>
-          <Typography variant="h5" gutterBottom sx={{ fontWeight: 600 }}>
-            No Articles Yet
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 4, maxWidth: 400, mx: 'auto' }}>
-            Connect your Ghost site to start syncing articles to Bluesky automatically
-          </Typography>
-        </Paper>
-      ) : (
+      <PageState
+        loading={loading}
+        error={error}
+        empty={posts.length === 0}
+        emptyMessage="No articles yet. Connect your Ghost site to start syncing."
+        emptyIcon={<ArticleIcon sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />}
+        onRetry={loadData}
+        loadingText="Loading articles..."
+      >
         <Grid container spacing={4}>
           {posts.map((post: Post & { user?: { id: string; email: string; name?: string | null } }, index: number) => {
             // Generate a gradient based on index
@@ -413,7 +379,7 @@ export default function ArticlesPage() {
             );
           })}
         </Grid>
-      )}
+      </PageState>
 
       {/* Publish to Bluesky Dialog */}
       <Dialog

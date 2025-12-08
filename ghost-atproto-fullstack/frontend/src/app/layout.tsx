@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Script from 'next/script';
 
 const geistSans = Geist({
@@ -38,7 +39,9 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
         <AppRouterCacheProvider>
           <ThemeProvider>
-            {children}
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
           </ThemeProvider>
         </AppRouterCacheProvider>
       </body>
