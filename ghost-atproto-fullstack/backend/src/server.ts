@@ -900,11 +900,14 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         name: true,
         role: true,
         blueskyHandle: true,
-        blueskyPassword: true,
         ghostUrl: true,
+        shimUrl: true,
+        createdAt: true,
+        // Don't return sensitive data - passwords/keys are write-only
+        blueskyPassword: true,
         ghostApiKey: true,
         ghostContentApiKey: true,
-        createdAt: true
+        shimSecret: true,
       }
     });
 
@@ -912,7 +915,14 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(user);
+    // Return masked version - indicate if configured but don't expose actual values
+    res.json({
+      ...user,
+      blueskyPassword: user.blueskyPassword ? '••••••••' : null,
+      ghostApiKey: user.ghostApiKey ? '••••••••' : null,
+      ghostContentApiKey: user.ghostContentApiKey ? '••••••••' : null,
+      shimSecret: user.shimSecret ? '••••••••' : null,
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch user' });
   }
@@ -1064,11 +1074,20 @@ app.put('/api/auth/me', authenticateToken, async (req, res) => {
         ghostUrl: true,
         ghostApiKey: true,
         ghostContentApiKey: true,
+        shimUrl: true,
+        shimSecret: true,
         createdAt: true
       }
     });
 
-    res.json(user);
+    // Return masked version - don't expose actual secrets
+    res.json({
+      ...user,
+      blueskyPassword: user.blueskyPassword ? '••••••••' : null,
+      ghostApiKey: user.ghostApiKey ? '••••••••' : null,
+      ghostContentApiKey: user.ghostContentApiKey ? '••••••••' : null,
+      shimSecret: user.shimSecret ? '••••••••' : null,
+    });
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user' });
@@ -1420,8 +1439,8 @@ app.get('/api/posts', async (req, res) => {
         user: {
           select: {
             id: true,
-            email: true,
             name: true,
+            // Don't expose email publicly
           }
         }
       }
@@ -1442,9 +1461,9 @@ app.get('/api/posts/:id', async (req, res) => {
         user: {
           select: {
             id: true,
-            email: true,
             name: true,
             blueskyHandle: true,
+            // Don't expose email publicly
           }
         }
       }

@@ -47,14 +47,17 @@ jobs:
             npx prisma migrate deploy
             npx prisma generate
             npm run build
-            pm2 restart atproto-backend 2>/dev/null || pm2 start dist/index.js --name atproto-backend
+            pm2 ping >/dev/null 2>&1 || pm2 resurrect 2>/dev/null || true
+            pm2 delete atproto-backend 2>/dev/null || true
+            pm2 start dist/index.js --name atproto-backend
             
             # Frontend
             log "Frontend..."
             cd ../frontend
             npm install
             npm run build
-            pm2 restart atproto-frontend 2>/dev/null || pm2 start npm --name atproto-frontend -- start
+            pm2 delete atproto-frontend 2>/dev/null || true
+            pm2 start npm --name atproto-frontend -- start
             
             pm2 save
             
