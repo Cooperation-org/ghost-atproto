@@ -16,6 +16,9 @@ import atprotoRoutes from './routes/atproto';
 import wizardRoutes from './routes/wizard';
 import oauthRoutes from './routes/oauth';
 import ghostRoutes from './routes/ghost';
+import authRoutes from './routes/auth';
+import usersRoutes from './routes/users';
+import civicActionsRoutes from './routes/civic-actions';
 import axios from 'axios';
 import { setupGoogleOAuth } from './lib/google-oauth';
 import { setupBlueskyOAuth } from './lib/bluesky-oauth';
@@ -824,11 +827,6 @@ app.post(
 // Generic JSON body parser with increased limit for image uploads
 app.use(express.json({ limit: '10mb' }));
 
-
-// Routes - Import new modular routes
-import authRoutes from './routes/auth';
-import usersRoutes from './routes/users';
-import civicActionsRoutes from './routes/civic-actions';
 
 // Mount route modules
 app.use('/api/atproto', atprotoRoutes);
