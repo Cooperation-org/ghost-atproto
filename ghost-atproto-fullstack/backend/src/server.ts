@@ -34,7 +34,10 @@ const prisma = new PrismaClient();
 let oauthClient: NodeOAuthClient | null = null;
 
 // JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.warn('[Security] JWT_SECRET not set - authentication will fail');
+}
 
 // Trust proxy - required for x-forwarded-proto to work correctly behind nginx
 // This allows Express to trust the X-Forwarded-* headers set by nginx
@@ -107,7 +110,7 @@ export async function registerGhostWebhook(ghostUrl: string, ghostApiKey: string
       audience: `/admin/`
     });
 
-    const webhookUrl = `${process.env.BACKEND_URL || 'http://204.236.176.29'}/api/ghost/webhook`;
+    const webhookUrl = `${process.env.BACKEND_URL}/api/ghost/webhook`;
     
     // Check if webhook already exists
     const existingWebhooks = await axios.get(`${ghostUrl}/ghost/api/admin/webhooks/`, {
@@ -892,39 +895,34 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
+    const userId = (req as any).userId;
     const user = await prisma.user.findUnique({
-      where: { id: (req as any).userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        blueskyHandle: true,
-        ghostUrl: true,
-        shimUrl: true,
-        createdAt: true,
-        // Don't return sensitive data - passwords/keys are write-only
-        blueskyPassword: true,
-        ghostApiKey: true,
-        ghostContentApiKey: true,
-        shimSecret: true,
-      }
+      where: { id: userId },
     });
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'User not found', userId });
     }
 
     // Return masked version - indicate if configured but don't expose actual values
     res.json({
-      ...user,
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      blueskyHandle: user.blueskyHandle,
+      ghostUrl: user.ghostUrl,
+      shimUrl: user.shimUrl,
+      createdAt: user.createdAt,
       blueskyPassword: user.blueskyPassword ? '••••••••' : null,
       ghostApiKey: user.ghostApiKey ? '••••••••' : null,
       ghostContentApiKey: user.ghostContentApiKey ? '••••••••' : null,
       shimSecret: user.shimSecret ? '••••••••' : null,
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch user' });
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[/api/auth/me] Error:', msg, error);
+    res.status(500).json({ error: 'Failed to fetch user', message: msg });
   }
 });
 

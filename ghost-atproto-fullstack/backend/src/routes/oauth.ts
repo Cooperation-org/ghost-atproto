@@ -8,7 +8,7 @@ import axios from 'axios';
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // ==================== Google OAuth Routes ====================
 

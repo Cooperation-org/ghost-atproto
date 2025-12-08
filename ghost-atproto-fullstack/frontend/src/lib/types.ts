@@ -59,6 +59,8 @@ export interface LoginResponse {
   token: string;
 }
 
-export interface ApiError {
+// Note: ApiError class is defined in api.ts with full error handling
+// This interface is kept for backwards compatibility with existing code
+export interface ApiErrorLegacy {
   error: string;
 }

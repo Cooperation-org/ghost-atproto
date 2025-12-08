@@ -6,7 +6,7 @@ import axios from 'axios';
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Middleware to authenticate token
 function authenticateToken(req: any, res: any, next: any) {
@@ -264,7 +264,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
     });
 
     // Generate webhook URL for Ghost
-    const webhookUrl = `${process.env.BACKEND_URL || 'http://204.236.176.29'}/api/ghost/webhook`;
+    const webhookUrl = `${process.env.BACKEND_URL}/api/ghost/webhook`;
 
     // Validate Ghost connection and register webhook
     let webhookRegistrationResult = {
@@ -323,7 +323,7 @@ router.post('/complete', authenticateToken, async (req, res) => {
 
       // Trigger sync without waiting for it to complete
       axios.post(
-        `${process.env.BACKEND_URL || 'http://204.236.176.29'}/api/auth/sync`,
+        `${process.env.BACKEND_URL}/api/auth/sync`,
         { limit: 50, force: false },
         {
           headers: {

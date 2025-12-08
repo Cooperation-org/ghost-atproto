@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Auth middleware for atproto routes
 function authenticateToken(req: any, res: any, next: any) {

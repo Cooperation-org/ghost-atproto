@@ -8,7 +8,7 @@ import { runCommentSync } from '../jobs/sync-comments';
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Middleware to authenticate token
 function authenticateToken(req: any, res: any, next: any) {

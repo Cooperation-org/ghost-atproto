@@ -15,7 +15,7 @@ export const oauthConfig = {
     scope: 'atproto transition:generic',
   },
   session: {
-    secret: process.env.SESSION_SECRET || process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+    secret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
   }
 };
 
