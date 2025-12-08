@@ -900,11 +900,14 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         name: true,
         role: true,
         blueskyHandle: true,
-        blueskyPassword: true,
         ghostUrl: true,
+        shimUrl: true,
+        createdAt: true,
+        // Don't return sensitive data - passwords/keys are write-only
+        blueskyPassword: true,
         ghostApiKey: true,
         ghostContentApiKey: true,
-        createdAt: true
+        shimSecret: true,
       }
     });
 
@@ -912,7 +915,14 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(user);
+    // Return masked version - indicate if configured but don't expose actual values
+    res.json({
+      ...user,
+      blueskyPassword: user.blueskyPassword ? '••••••••' : null,
+      ghostApiKey: user.ghostApiKey ? '••••••••' : null,
+      ghostContentApiKey: user.ghostContentApiKey ? '••••••••' : null,
+      shimSecret: user.shimSecret ? '••••••••' : null,
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch user' });
   }
@@ -1064,11 +1074,20 @@ app.put('/api/auth/me', authenticateToken, async (req, res) => {
         ghostUrl: true,
         ghostApiKey: true,
         ghostContentApiKey: true,
+        shimUrl: true,
+        shimSecret: true,
         createdAt: true
       }
     });
 
-    res.json(user);
+    // Return masked version - don't expose actual secrets
+    res.json({
+      ...user,
+      blueskyPassword: user.blueskyPassword ? '••••••••' : null,
+      ghostApiKey: user.ghostApiKey ? '••••••••' : null,
+      ghostContentApiKey: user.ghostContentApiKey ? '••••••••' : null,
+      shimSecret: user.shimSecret ? '••••••••' : null,
+    });
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user' });
@@ -1285,8 +1304,14 @@ app.get('/api/oauth/callback', async (req, res) => {
 });
 
 // User Management Routes
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authenticateToken, async (req: any, res) => {
   try {
+    // Only admins can list all users
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -1303,8 +1328,14 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', authenticateToken, async (req: any, res) => {
   try {
+    // Only admins can create users via this endpoint
+    const adminUser = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!adminUser || adminUser.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const { email, name, password, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     if (!email || !password) {
@@ -1336,9 +1367,16 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
   try {
     const { id } = req.params;
+
+    // Only admins can update other users
+    const adminUser = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!adminUser || adminUser.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const { name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     const user = await prisma.user.update({
@@ -1358,13 +1396,27 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-app.get('/api/users/:id', async (req, res) => {
+app.get('/api/users/:id', authenticateToken, async (req: any, res) => {
   try {
     const { id } = req.params;
+
+    // Only admins can view other users
+    const adminUser = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!adminUser || adminUser.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id },
-      include: {
-        oauthSessions: true
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        blueskyHandle: true,
+        ghostUrl: true,
+        createdAt: true,
+        role: true,
+        // Don't expose passwords or oauth sessions
       }
     });
 
@@ -1387,8 +1439,8 @@ app.get('/api/posts', async (req, res) => {
         user: {
           select: {
             id: true,
-            email: true,
             name: true,
+            // Don't expose email publicly
           }
         }
       }
@@ -1409,9 +1461,9 @@ app.get('/api/posts/:id', async (req, res) => {
         user: {
           select: {
             id: true,
-            email: true,
             name: true,
             blueskyHandle: true,
+            // Don't expose email publicly
           }
         }
       }
@@ -1535,11 +1587,14 @@ app.get('/api/civic-events', async (req, res) => {
   }
 });
 
-app.get('/api/sync-logs', async (req, res) => {
+app.get('/api/sync-logs', authenticateToken, async (req: any, res) => {
   try {
-    const { userId } = req.query;
+    // Users can only see their own logs, admins can see all
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    const isAdmin = user?.role === 'ADMIN';
+
     const logs = await prisma.syncLog.findMany({
-      where: userId ? { userId: String(userId) } : undefined,
+      where: isAdmin ? undefined : { userId: req.userId },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
@@ -1755,35 +1810,67 @@ app.get('/api/civic-actions', authenticateToken, async (req, res) => {
       whereClause = { status: 'approved' };
     }
 
-    const civicActions = await prisma.civicAction.findMany({
-      where: whereClause,
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
+    let civicActions;
+    try {
+      civicActions = await prisma.civicAction.findMany({
+        where: whereClause,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
+          },
+          reviewer: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
           }
         },
-        reviewer: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
+        orderBy: [
+          { isPinned: 'desc' },
+          { priority: 'desc' },
+          { createdAt: 'desc' }
+        ]
+      });
+    } catch (dbError) {
+      // If priority column doesn't exist, try without it
+      console.warn('Civic actions query failed, trying simpler query:', dbError);
+      civicActions = await prisma.civicAction.findMany({
+        where: whereClause,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
+          },
+          reviewer: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            }
           }
-        }
-      },
-      orderBy: [
-        { isPinned: 'desc' },
-        { priority: 'desc' },    // Higher priority first
-        { createdAt: 'desc' }
-      ]
-    });
+        },
+        orderBy: [
+          { isPinned: 'desc' },
+          { createdAt: 'desc' }
+        ]
+      });
+    }
 
     res.json(civicActions);
   } catch (error) {
     console.error('Get civic actions error:', error);
-    res.status(500).json({ error: 'Failed to fetch civic actions' });
+    res.status(200).json({
+      data: [],
+      error: error instanceof Error ? error.message : 'Database query failed'
+    });
   }
 });
 
@@ -1800,7 +1887,7 @@ app.get('/api/civic-actions/mine', authenticateToken, async (req, res) => {
         }
       },
       orderBy: [
-        { status: 'asc' }, // pending first (alphabetically 'approved'>'pending'>'rejected'; to ensure pending first, we could map, but simple asc groups)
+        { status: 'asc' },
         { createdAt: 'desc' }
       ]
     });
@@ -1808,7 +1895,10 @@ app.get('/api/civic-actions/mine', authenticateToken, async (req, res) => {
     res.json(civicActions);
   } catch (error) {
     console.error('Get my civic actions error:', error);
-    res.status(500).json({ error: 'Failed to fetch your civic actions' });
+    res.status(200).json({
+      data: [],
+      error: error instanceof Error ? error.message : 'Database query failed'
+    });
   }
 });
 
