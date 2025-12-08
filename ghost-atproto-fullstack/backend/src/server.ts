@@ -1285,8 +1285,14 @@ app.get('/api/oauth/callback', async (req, res) => {
 });
 
 // User Management Routes
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authenticateToken, async (req: any, res) => {
   try {
+    // Only admins can list all users
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!user || user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -1303,8 +1309,14 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', authenticateToken, async (req: any, res) => {
   try {
+    // Only admins can create users via this endpoint
+    const adminUser = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!adminUser || adminUser.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const { email, name, password, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     if (!email || !password) {
@@ -1336,9 +1348,16 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', authenticateToken, async (req: any, res) => {
   try {
     const { id } = req.params;
+
+    // Only admins can update other users
+    const adminUser = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!adminUser || adminUser.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const { name, blueskyHandle, blueskyPassword, ghostUrl, ghostApiKey } = req.body;
 
     const user = await prisma.user.update({
@@ -1358,13 +1377,27 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-app.get('/api/users/:id', async (req, res) => {
+app.get('/api/users/:id', authenticateToken, async (req: any, res) => {
   try {
     const { id } = req.params;
+
+    // Only admins can view other users
+    const adminUser = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!adminUser || adminUser.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id },
-      include: {
-        oauthSessions: true
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        blueskyHandle: true,
+        ghostUrl: true,
+        createdAt: true,
+        role: true,
+        // Don't expose passwords or oauth sessions
       }
     });
 
@@ -1535,11 +1568,14 @@ app.get('/api/civic-events', async (req, res) => {
   }
 });
 
-app.get('/api/sync-logs', async (req, res) => {
+app.get('/api/sync-logs', authenticateToken, async (req: any, res) => {
   try {
-    const { userId } = req.query;
+    // Users can only see their own logs, admins can see all
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    const isAdmin = user?.role === 'ADMIN';
+
     const logs = await prisma.syncLog.findMany({
-      where: userId ? { userId: String(userId) } : undefined,
+      where: isAdmin ? undefined : { userId: req.userId },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
