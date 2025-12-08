@@ -122,7 +122,7 @@ router.get('/public/civic-actions/:id', async (req: Request, res: Response) => {
  * GET /api/civic-actions
  * List civic actions (admins see all, users see approved)
  */
-router.get('/', optionalAuth, async (req: Request, res: Response) => {
+router.get('/civic-actions', optionalAuth, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthRequest;
     const isAdmin = authReq.user?.role === 'ADMIN';
@@ -176,7 +176,7 @@ router.get('/', optionalAuth, async (req: Request, res: Response) => {
  * GET /api/civic-actions/mine
  * List user's own civic actions
  */
-router.get('/mine', authenticateToken, async (req: Request, res: Response) => {
+router.get('/civic-actions/mine', authenticateToken, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthRequest;
 
@@ -213,7 +213,7 @@ router.get('/mine', authenticateToken, async (req: Request, res: Response) => {
  * GET /api/civic-actions/:id
  * Get civic action by ID
  */
-router.get('/:id', optionalAuth, async (req: Request, res: Response) => {
+router.get('/civic-actions/:id', optionalAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const authReq = req as AuthRequest;
@@ -262,7 +262,7 @@ router.get('/:id', optionalAuth, async (req: Request, res: Response) => {
  * POST /api/civic-actions
  * Create new civic action
  */
-router.post('/', authenticateToken, async (req: Request, res: Response) => {
+router.post('/civic-actions', authenticateToken, async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthRequest;
     const { title, description, eventType, eventDate, location, imageUrl } = req.body;
@@ -304,7 +304,7 @@ router.post('/', authenticateToken, async (req: Request, res: Response) => {
  * PUT /api/civic-actions/:id
  * Update civic action (owner can edit pending, admin can edit any)
  */
-router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
+router.put('/civic-actions/:id', authenticateToken, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const authReq = req as AuthRequest;
@@ -365,7 +365,7 @@ router.put('/:id', authenticateToken, async (req: Request, res: Response) => {
  * POST /api/civic-actions/:id/approve
  * Approve civic action (admin only)
  */
-router.post('/:id/approve', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post('/civic-actions/:id/approve', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { pinned } = req.body;
@@ -393,7 +393,7 @@ router.post('/:id/approve', authenticateToken, requireAdmin, async (req: Request
  * POST /api/civic-actions/:id/reject
  * Reject civic action (admin only)
  */
-router.post('/:id/reject', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post('/civic-actions/:id/reject', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -420,7 +420,7 @@ router.post('/:id/reject', authenticateToken, requireAdmin, async (req: Request,
  * POST /api/civic-actions/:id/toggle-pin
  * Toggle pin status (admin only)
  */
-router.post('/:id/toggle-pin', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post('/civic-actions/:id/toggle-pin', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -451,7 +451,7 @@ router.post('/:id/toggle-pin', authenticateToken, requireAdmin, async (req: Requ
  * POST /api/civic-actions/:id/set-priority
  * Set priority (admin only)
  */
-router.post('/:id/set-priority', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post('/civic-actions/:id/set-priority', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { priority } = req.body;
@@ -475,7 +475,7 @@ router.post('/:id/set-priority', authenticateToken, requireAdmin, async (req: Re
  * POST /api/civic-actions/:id/recommend
  * Mark as recommended by admin
  */
-router.post('/:id/recommend', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
+router.post('/civic-actions/:id/recommend', authenticateToken, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const authReq = req as AuthRequest;

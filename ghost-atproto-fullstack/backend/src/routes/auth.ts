@@ -263,23 +263,4 @@ router.put('/me', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /api/auth/oauth/config
- * Get available OAuth providers
- */
-router.get('/oauth/config', (_req: Request, res: Response) => {
-  res.json({
-    google: {
-      enabled: !!process.env.GOOGLE_CLIENT_ID,
-      buttonText: 'Continue with Google',
-    },
-    bluesky: {
-      enabled: true,
-      buttonText: 'Continue with Bluesky',
-      requiresHandle: true,
-      handlePlaceholder: 'your-handle.bsky.social',
-    },
-  });
-});
-
 export default router;
