@@ -43,8 +43,8 @@ jobs:
             log "Backend..."
             cd backend
             npm ci --ignore-scripts
-            npm rebuild
-            npx prisma migrate deploy
+            npm rebuild --ignore-scripts
+            npx prisma migrate deploy --skip-generate
             npx prisma generate
             npm run build
             pm2 ping >/dev/null 2>&1 || pm2 resurrect 2>/dev/null || true
@@ -55,7 +55,7 @@ jobs:
             log "Frontend..."
             cd ../frontend
             npm ci --ignore-scripts
-            npm rebuild
+            npm rebuild --ignore-scripts
             npm run build
             pm2 delete atproto-frontend 2>/dev/null || true
             pm2 start npm --name atproto-frontend -- start

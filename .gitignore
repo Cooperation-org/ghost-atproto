@@ -27,7 +27,6 @@ build/
 yarn.lock
 
 # Package manager files
-package-lock.json # (If you're using npm, include this, otherwise ignore it if using yarn/pnpm)
 pnpm-lock.yaml # (For pnpm, include this instead of package-lock.json)
 
 # IDE / Editor files
