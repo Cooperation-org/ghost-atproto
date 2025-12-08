@@ -232,6 +232,7 @@ export default function ArticlesPage() {
             return (
               <Grid size={{ xs: 12, sm: 6, lg: 4 }} key={post.id}>
                 <Card
+                  onClick={() => post.ghostUrl && window.open(post.ghostUrl, '_blank')}
                   sx={{
                     height: '100%',
                     display: 'flex',
@@ -241,6 +242,7 @@ export default function ArticlesPage() {
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     border: '1px solid',
                     borderColor: 'grey.200',
+                    cursor: post.ghostUrl ? 'pointer' : 'default',
                     '&:hover': {
                       transform: 'translateY(-8px)',
                       boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
@@ -379,6 +381,7 @@ export default function ArticlesPage() {
                             href={getBlueskyPostUrl(post.atprotoUri)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
                             fullWidth
                             variant="contained"
                             startIcon={<OpenInNewIcon />}
@@ -397,7 +400,10 @@ export default function ArticlesPage() {
                           </Button>
                         ) : (
                           <Button
-                            onClick={() => handleOpenPublishDialog(post)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenPublishDialog(post);
+                            }}
                             fullWidth
                             variant="contained"
                             startIcon={<CloudIcon />}
@@ -416,24 +422,31 @@ export default function ArticlesPage() {
                           </Button>
                         )}
 
-                        <Button
-                          onClick={() => window.location.href = `/bridge/article/${post.id}`}
-                          fullWidth
-                          variant="outlined"
-                          sx={{
-                            textTransform: 'none',
-                            borderRadius: 2,
-                            py: 1,
-                            fontWeight: 600,
-                            '&:hover': {
-                              bgcolor: 'primary.main',
-                              color: 'white',
-                              borderColor: 'primary.main'
-                            }
-                          }}
-                        >
-                          Read Full Article
-                        </Button>
+                        {post.ghostUrl && (
+                          <Button
+                            component={Link}
+                            href={post.ghostUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            fullWidth
+                            variant="outlined"
+                            startIcon={<OpenInNewIcon />}
+                            sx={{
+                              textTransform: 'none',
+                              borderRadius: 2,
+                              py: 1,
+                              fontWeight: 600,
+                              '&:hover': {
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                borderColor: 'primary.main'
+                              }
+                            }}
+                          >
+                            Read on Ghost
+                          </Button>
+                        )}
                       </Box>
                     </Box>
                   </CardContent>

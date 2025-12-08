@@ -196,7 +196,7 @@ export async function fetchGhostPosts(
 ): Promise<GhostPost[]> {
   const token = createGhostAdminToken(ghostApiKey);
   const url = new URL(ghostUrl);
-  const apiUrl = `${url.origin}/ghost/api/admin/posts/?limit=${limit}&formats=html,plaintext`;
+  const apiUrl = `${url.origin}/ghost/api/admin/posts/?limit=${limit}&formats=html,plaintext&filter=status:published`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout

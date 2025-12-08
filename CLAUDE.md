@@ -1,7 +1,70 @@
 # Ghost ATProto Bridge - System Overview
 
 ## Purpose
-Bridge system to sync Ghost blog posts to Bluesky/ATProto and bring comments back to Ghost.
+Multi-audience platform bridging Ghost blogs, Bluesky, and civic engagement.
+
+## Three Use Cases (Context-Based, Not Role-Based)
+
+### 1. **Author Context** (Primary - Current Focus)
+When viewing YOUR OWN article:
+- Sync posts FROM your Ghost site TO Bluesky
+- Aggregate Bluesky comments BACK to your Ghost site
+- Manage civic actions in your articles
+- Publish to Bluesky
+- **View**: YOUR articles at `/dashboard/articles`
+- **Key feature**: Bidirectional sync (Ghost ↔ Bluesky ↔ Ghost)
+
+### 2. **Reader Context** (Engaged Users)
+When viewing SOMEONE ELSE's article:
+- Take civic actions on the article
+- Commit to actions, mark as completed
+- See other readers' engagement
+- **Impact Dashboard** (`/dashboard`) shows:
+  - All civic actions YOU took (on anyone's articles)
+  - If you're also an author: Your authored articles
+  - Your commitments and progress
+
+**Key Point**: Same person can be in BOTH contexts
+- Author when viewing their own articles
+- Reader when viewing others' articles
+
+### 3. **Anonymous Context** (Future)
+Browsing without login:
+- Search articles from any author
+- Browse civic actions
+- Public feed of published content
+- **No authentication required**
+
+**Current Implementation Status**:
+- ✓ Authors: Full dashboard with article sync at `/dashboard/articles`
+- ✓ Civic Action Users: Impact dashboard at `/dashboard` (main page)
+  - Shows: Completed actions, active commitments, created actions, created articles
+  - API: `/api/user/impact`
+- ⚠ Anonymous Readers: Not yet implemented
+
+**User Roles in Database** (Metadata Only, Not Enforced):
+- `USER` - Default role
+- `AUTHOR` - Indicates user has Ghost site
+- `ADMIN` - Has admin privileges
+
+**Important**: Role field is NOT used to restrict access!
+- Features shown based on what's configured, not role
+- If user has `ghostUrl` + `ghostApiKey` → show Ghost sync features
+- If user has civic engagements → show in impact dashboard
+- Same person uses both author and reader features contextually
+
+**Current UX Flow**:
+- Login → `/dashboard` (impact dashboard)
+  - Shows all civic actions you took on any article
+  - Shows your authored articles (if any)
+  - Shows your commitments and progress
+- `/dashboard/articles` - Author features
+  - Shows only YOUR articles from YOUR Ghost instance
+  - Has "Sync from Ghost" button
+  - Has "Publish to Bluesky" for each article
+- `/article/:id` - Reading someone's article (future)
+  - If it's YOUR article → author controls
+  - If it's SOMEONE ELSE's article → civic action buttons
 
 ## Architecture
 

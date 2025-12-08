@@ -343,8 +343,10 @@ router.post('/sync-posts', authenticateToken, async (req, res) => {
           where: { id: existing.id },
           data: {
             title: ghostPost.title,
-            content: ghostPost.html,
+            content: ghostPost.html || ghostPost.plaintext || '',
             ghostUrl: ghostPost.url,
+            status: 'published',
+            publishedAt: ghostPost.published_at ? new Date(ghostPost.published_at) : null,
           },
         });
         updatedCount++;
@@ -355,8 +357,10 @@ router.post('/sync-posts', authenticateToken, async (req, res) => {
             ghostId: ghostPost.id,
             slug: ghostPost.slug,
             title: ghostPost.title,
-            content: ghostPost.html,
+            content: ghostPost.html || ghostPost.plaintext || '',
             ghostUrl: ghostPost.url,
+            status: 'published',
+            publishedAt: ghostPost.published_at ? new Date(ghostPost.published_at) : null,
           },
         });
         newCount++;
