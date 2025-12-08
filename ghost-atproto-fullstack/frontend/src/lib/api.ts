@@ -137,6 +137,8 @@ class ApiClient {
           window.location.pathname +
           (urlParams.toString() ? '?' + urlParams.toString() : '');
         window.history.replaceState({}, '', newUrl);
+      } else if (!this.token) {
+        this.token = localStorage.getItem('token');
       }
     }
   }
