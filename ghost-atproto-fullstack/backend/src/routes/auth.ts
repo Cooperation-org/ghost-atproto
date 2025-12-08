@@ -17,6 +17,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { ApiError, handleError } from '../lib/errors';
+import { fetchGhostPosts } from '../lib/ghost-admin';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -260,6 +261,35 @@ router.put('/me', authenticateToken, async (req: Request, res: Response) => {
     });
   } catch (error) {
     handleError(res, error, 'Failed to update user', 'auth/me PUT');
+  }
+});
+
+/**
+ * GET /api/auth/posts
+ * Get posts from database for the authenticated user
+ */
+router.get('/posts', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.user.id;
+
+    const posts = await prisma.post.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    res.json(posts);
+  } catch (error) {
+    handleError(res, error, 'Failed to fetch posts', 'auth/posts');
   }
 });
 

@@ -49,7 +49,7 @@ export default function ArticlesPage() {
     setLoading(true);
     setError(null);
     try {
-      const postsData = await api.getAllPosts();
+      const postsData = await api.getPosts();
       setPosts(postsData);
     } catch (err) {
       if (err instanceof ApiError && err.isUnauthorized()) {
@@ -144,15 +144,39 @@ export default function ArticlesPage() {
         </Typography>
       </Box>
 
-      <PageState
-        loading={loading}
-        error={error}
-        empty={posts.length === 0}
-        emptyMessage="No articles yet. Connect your Ghost site to start syncing."
-        emptyIcon={<ArticleIcon sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />}
-        onRetry={loadData}
-        loadingText="Loading articles..."
-      >
+      {/* Show error if present */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} action={
+          <Button color="inherit" size="small" onClick={loadData}>
+            Retry
+          </Button>
+        }>
+          {error.message}
+        </Alert>
+      )}
+
+      {/* Show loading state */}
+      {loading && posts.length === 0 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8 }}>
+          <CircularProgress size={48} sx={{ mb: 2 }} />
+          <Typography variant="body1" color="text.secondary">
+            Loading articles...
+          </Typography>
+        </Box>
+      )}
+
+      {/* Show empty state */}
+      {!loading && posts.length === 0 && !error && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 8 }}>
+          <ArticleIcon sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
+          <Typography variant="body1" color="text.secondary">
+            No articles yet. Connect your Ghost site to start syncing.
+          </Typography>
+        </Box>
+      )}
+
+      {/* Show posts grid */}
+      {posts.length > 0 && (
         <Grid container spacing={4}>
           {posts.map((post: Post & { user?: { id: string; email: string; name?: string | null } }, index: number) => {
             // Generate a gradient based on index
@@ -379,7 +403,7 @@ export default function ArticlesPage() {
             );
           })}
         </Grid>
-      </PageState>
+      )}
 
       {/* Publish to Bluesky Dialog */}
       <Dialog

@@ -78,9 +78,9 @@ export class ApiError extends Error {
 // =============================================================================
 
 const CONFIG = {
-  timeout: 30000, // 30 seconds
-  retries: 3,
-  retryDelay: 1000, // 1 second between retries
+  timeout: 10000, // 10 seconds default
+  retries: 1, // Only retry once
+  retryDelay: 500, // 500ms between retries
   retryableStatuses: [502, 503, 504], // Gateway errors are retryable
 };
 

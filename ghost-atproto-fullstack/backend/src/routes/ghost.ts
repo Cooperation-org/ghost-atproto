@@ -1,6 +1,6 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
-import { ensureBlueskyMember } from '../lib/ghost-admin';
+import { ensureBlueskyMember, testGhostConnection, fetchGhostPosts } from '../lib/ghost-admin';
 import { syncCommentsForPost } from '../services/comment-sync';
 import { ShimClient } from '../lib/shim-client';
 import { runCommentSync } from '../jobs/sync-comments';
@@ -273,6 +273,106 @@ router.post('/sync-comments', authenticateToken, async (req, res) => {
     console.error('Sync all comments error:', error);
     return res.status(500).json({
       error: error instanceof Error ? error.message : 'Failed to sync comments',
+    });
+  }
+});
+
+/**
+ * Test Ghost Admin API connection
+ * POST /api/ghost/test-connection
+ */
+router.post('/test-connection', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { ghostUrl: true, ghostApiKey: true },
+    });
+
+    if (!user?.ghostUrl || !user?.ghostApiKey) {
+      return res.status(400).json({
+        error: 'Ghost URL and Admin API key must be configured first',
+      });
+    }
+
+    const result = await testGhostConnection(user.ghostUrl, user.ghostApiKey);
+    return res.json(result);
+  } catch (error) {
+    console.error('Test Ghost connection error:', error);
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to test connection',
+    });
+  }
+});
+
+/**
+ * Fetch posts from Ghost and save to database
+ * POST /api/ghost/sync-posts
+ */
+router.post('/sync-posts', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { ghostUrl: true, ghostApiKey: true },
+    });
+
+    if (!user?.ghostUrl || !user?.ghostApiKey) {
+      return res.status(400).json({
+        error: 'Ghost URL and Admin API key must be configured first',
+      });
+    }
+
+    const ghostPosts = await fetchGhostPosts(user.ghostUrl, user.ghostApiKey);
+
+    let newCount = 0;
+    let updatedCount = 0;
+
+    for (const ghostPost of ghostPosts) {
+      const existing = await prisma.post.findFirst({
+        where: {
+          userId,
+          ghostId: ghostPost.id,
+        },
+      });
+
+      if (existing) {
+        await prisma.post.update({
+          where: { id: existing.id },
+          data: {
+            title: ghostPost.title,
+            content: ghostPost.html,
+            ghostUrl: ghostPost.url,
+          },
+        });
+        updatedCount++;
+      } else {
+        await prisma.post.create({
+          data: {
+            userId,
+            ghostId: ghostPost.id,
+            slug: ghostPost.slug,
+            title: ghostPost.title,
+            content: ghostPost.html,
+            ghostUrl: ghostPost.url,
+          },
+        });
+        newCount++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Synced ${ghostPosts.length} posts from Ghost`,
+      newPosts: newCount,
+      updatedPosts: updatedCount,
+    });
+  } catch (error) {
+    console.error('Sync Ghost posts error:', error);
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to sync posts from Ghost',
     });
   }
 });

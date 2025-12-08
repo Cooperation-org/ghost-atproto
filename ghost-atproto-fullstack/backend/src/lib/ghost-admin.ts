@@ -131,3 +131,100 @@ export async function ensureBlueskyMember(
   console.log('Created Bluesky member:', member.id);
   return member;
 }
+
+export interface GhostPost {
+  id: string;
+  title: string;
+  slug: string;
+  html: string;
+  plaintext?: string;
+  feature_image?: string;
+  published_at: string;
+  url: string;
+  excerpt?: string;
+}
+
+/**
+ * Test Ghost Admin API connection
+ */
+export async function testGhostConnection(
+  ghostUrl: string,
+  ghostApiKey: string
+): Promise<{ success: boolean; message: string; siteTitle?: string }> {
+  try {
+    const token = createGhostAdminToken(ghostApiKey);
+    const url = new URL(ghostUrl);
+    const apiUrl = `${url.origin}/ghost/api/admin/site/`;
+
+    const response = await global.fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v5.0',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        message: `Failed to connect: ${response.statusText} - ${errorText}`,
+      };
+    }
+
+    const data: any = await response.json();
+    return {
+      success: true,
+      message: 'Connected successfully',
+      siteTitle: data.site?.title,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Connection failed',
+    };
+  }
+}
+
+/**
+ * Fetch posts from Ghost
+ */
+export async function fetchGhostPosts(
+  ghostUrl: string,
+  ghostApiKey: string,
+  limit: number = 50
+): Promise<GhostPost[]> {
+  const token = createGhostAdminToken(ghostApiKey);
+  const url = new URL(ghostUrl);
+  const apiUrl = `${url.origin}/ghost/api/admin/posts/?limit=${limit}&formats=html,plaintext`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+  try {
+    const response = await global.fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Ghost ${token}`,
+        'Accept-Version': 'v5.0',
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to fetch Ghost posts: ${response.statusText} - ${errorText}`);
+    }
+
+    const data: any = await response.json();
+    return data.posts || [];
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Ghost API request timed out after 8 seconds');
+    }
+    throw error;
+  }
+}

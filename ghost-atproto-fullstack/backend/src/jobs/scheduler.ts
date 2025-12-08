@@ -15,18 +15,19 @@ export function startScheduler() {
     }
   });
 
-  // Run comment sync every 15 minutes
+  // DISABLED: Run comment sync every 15 minutes
   // This fetches new Bluesky replies and syncs them to Ghost
-  cron.schedule('*/15 * * * *', async () => {
-    console.log('🕐 Running scheduled comment sync...');
-    try {
-      await runCommentSync();
-    } catch (error) {
-      console.error('❌ Scheduled comment sync failed:', error);
-    }
-  });
+  // TODO: Re-enable once the sync-comments job is fixed
+  // cron.schedule('*/15 * * * *', async () => {
+  //   console.log('🕐 Running scheduled comment sync...');
+  //   try {
+  //     await runCommentSync();
+  //   } catch (error) {
+  //     console.error('❌ Scheduled comment sync failed:', error);
+  //   }
+  // });
 
   console.log('✅ Scheduler started:');
   console.log('   - Mobilize sync: daily at 2:00 AM');
-  console.log('   - Comment sync: every 15 minutes');
+  console.log('   - Comment sync: DISABLED (needs fix)');
 }
