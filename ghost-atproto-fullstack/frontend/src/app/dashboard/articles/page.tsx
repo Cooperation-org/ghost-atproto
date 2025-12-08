@@ -14,9 +14,18 @@ import {
   Button,
   Avatar,
   Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Alert,
+  Link,
 } from '@mui/material';
 import ArticleIcon from '@mui/icons-material/Article';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CloudIcon from '@mui/icons-material/Cloud';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { api } from '@/lib/api';
 import { Post } from '@/lib/types';
@@ -25,6 +34,14 @@ export default function ArticlesPage() {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Bluesky publish dialog state
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [postContent, setPostContent] = useState('');
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
+  const [publishSuccess, setPublishSuccess] = useState('');
 
   useEffect(() => {
     // Extract token from URL if present (from OAuth redirect)
@@ -47,6 +64,75 @@ export default function ArticlesPage() {
 
     loadData();
   }, [router]);
+
+  // Open publish dialog with pre-filled content
+  const handleOpenPublishDialog = (post: Post) => {
+    setSelectedPost(post);
+    setPublishError('');
+    setPublishSuccess('');
+
+    // Pre-fill with title and link
+    const textContent = post.content ? post.content.replace(/<[^>]*>/g, '').substring(0, 150) : '';
+    let defaultContent = post.title;
+    if (textContent) {
+      defaultContent += `\n\n${textContent}...`;
+    }
+    if (post.ghostUrl) {
+      defaultContent += `\n\n${post.ghostUrl}`;
+    }
+    // Trim to 300 chars if needed
+    if (defaultContent.length > 300) {
+      defaultContent = defaultContent.substring(0, 297) + '...';
+    }
+    setPostContent(defaultContent);
+    setPublishDialogOpen(true);
+  };
+
+  const handleClosePublishDialog = () => {
+    setPublishDialogOpen(false);
+    setSelectedPost(null);
+    setPostContent('');
+    setPublishError('');
+  };
+
+  const handlePublishToBluesky = async () => {
+    if (!selectedPost || !postContent.trim()) return;
+
+    setPublishing(true);
+    setPublishError('');
+    setPublishSuccess('');
+
+    try {
+      const result = await api.publishToBluesky(selectedPost.id, postContent);
+      setPublishSuccess(`Posted to Bluesky! View at: ${result.atprotoUri}`);
+
+      // Update the post in the list to show it's synced
+      setPosts(posts.map(p =>
+        p.id === selectedPost.id
+          ? { ...p, atprotoUri: result.atprotoUri, atprotoCid: result.atprotoCid }
+          : p
+      ));
+
+      // Close dialog after a short delay
+      setTimeout(() => {
+        handleClosePublishDialog();
+      }, 2000);
+    } catch (error) {
+      setPublishError(error instanceof Error ? error.message : 'Failed to publish to Bluesky');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // Convert AT URI to Bluesky web URL
+  const getBlueskyPostUrl = (atUri: string): string => {
+    // at://did:plc:xxx/app.bsky.feed.post/xxx -> https://bsky.app/profile/did:plc:xxx/post/xxx
+    const match = atUri.match(/at:\/\/(did:[^/]+)\/app\.bsky\.feed\.post\/(.+)/);
+    if (match) {
+      return `https://bsky.app/profile/${match[1]}/post/${match[2]}`;
+    }
+    return atUri;
+  };
 
   if (loading) {
     return (
@@ -255,25 +341,71 @@ export default function ArticlesPage() {
                         )}
                       </Box>
 
-                      {/* View Link */}
-                      <Button
-                        onClick={() => window.location.href = `/bridge/article/${post.id}`}
-                        fullWidth
-                        variant="outlined"
-                        sx={{
-                          textTransform: 'none',
-                          borderRadius: 2,
-                          py: 1,
-                          fontWeight: 600,
-                          '&:hover': {
-                            bgcolor: 'primary.main',
-                            color: 'white',
-                            borderColor: 'primary.main'
-                          }
-                        }}
-                      >
-                        Read Full Article →
-                      </Button>
+                      {/* Action Buttons */}
+                      <Box sx={{ display: 'flex', gap: 1, flexDirection: 'column' }}>
+                        {/* Post to Bluesky button - only show if not already posted */}
+                        {post.atprotoUri ? (
+                          <Button
+                            component={Link}
+                            href={getBlueskyPostUrl(post.atprotoUri)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            fullWidth
+                            variant="contained"
+                            startIcon={<OpenInNewIcon />}
+                            sx={{
+                              textTransform: 'none',
+                              borderRadius: 2,
+                              py: 1,
+                              fontWeight: 600,
+                              bgcolor: '#0085ff',
+                              '&:hover': {
+                                bgcolor: '#0066cc'
+                              }
+                            }}
+                          >
+                            View on Bluesky
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => handleOpenPublishDialog(post)}
+                            fullWidth
+                            variant="contained"
+                            startIcon={<CloudIcon />}
+                            sx={{
+                              textTransform: 'none',
+                              borderRadius: 2,
+                              py: 1,
+                              fontWeight: 600,
+                              bgcolor: '#0085ff',
+                              '&:hover': {
+                                bgcolor: '#0066cc'
+                              }
+                            }}
+                          >
+                            Post to Bluesky
+                          </Button>
+                        )}
+
+                        <Button
+                          onClick={() => window.location.href = `/bridge/article/${post.id}`}
+                          fullWidth
+                          variant="outlined"
+                          sx={{
+                            textTransform: 'none',
+                            borderRadius: 2,
+                            py: 1,
+                            fontWeight: 600,
+                            '&:hover': {
+                              bgcolor: 'primary.main',
+                              color: 'white',
+                              borderColor: 'primary.main'
+                            }
+                          }}
+                        >
+                          Read Full Article
+                        </Button>
+                      </Box>
                     </Box>
                   </CardContent>
                 </Card>
@@ -282,6 +414,72 @@ export default function ArticlesPage() {
           })}
         </Grid>
       )}
+
+      {/* Publish to Bluesky Dialog */}
+      <Dialog
+        open={publishDialogOpen}
+        onClose={handleClosePublishDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CloudIcon sx={{ color: '#0085ff' }} />
+            Post to Bluesky
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {publishError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {publishError}
+            </Alert>
+          )}
+          {publishSuccess && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {publishSuccess}
+            </Alert>
+          )}
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Edit the content below before posting to Bluesky. Maximum 300 characters.
+          </Typography>
+
+          {selectedPost && (
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+              Article: {selectedPost.title}
+            </Typography>
+          )}
+
+          <TextField
+            fullWidth
+            multiline
+            rows={6}
+            value={postContent}
+            onChange={(e) => setPostContent(e.target.value)}
+            placeholder="Write your Bluesky post..."
+            error={postContent.length > 300}
+            helperText={`${postContent.length}/300 characters${postContent.length > 300 ? ' (exceeds limit)' : ''}`}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={handleClosePublishDialog} disabled={publishing}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handlePublishToBluesky}
+            variant="contained"
+            disabled={publishing || postContent.length === 0 || postContent.length > 300}
+            startIcon={publishing ? <CircularProgress size={16} color="inherit" /> : <CloudIcon />}
+            sx={{
+              bgcolor: '#0085ff',
+              '&:hover': { bgcolor: '#0066cc' }
+            }}
+          >
+            {publishing ? 'Posting...' : 'Post to Bluesky'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </DashboardLayout>
   );
 }
