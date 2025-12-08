@@ -25,11 +25,10 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 10m
           script: |
-            sudo su - civicsky << 'DEPLOY'
             set -euo pipefail
-            
+
             log() { echo "[$(date +'%H:%M:%S')] $*"; }
-            
+
             log "🚀 Deploying..."
             cd ~/ghost-atproto/ghost-atproto-fullstack
             
@@ -86,5 +85,3 @@ jobs:
             fi
             
             log "🎉 Deployment successful!"
-            
-            DEPLOY
