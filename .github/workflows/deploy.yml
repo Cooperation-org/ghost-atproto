@@ -42,7 +42,8 @@ jobs:
             # Backend
             log "Backend..."
             cd backend
-            npm install
+            npm ci --ignore-scripts
+            npm rebuild
             npx prisma migrate deploy
             npx prisma generate
             npm run build
@@ -53,7 +54,8 @@ jobs:
             # Frontend
             log "Frontend..."
             cd ../frontend
-            npm install
+            npm ci --ignore-scripts
+            npm rebuild
             npm run build
             pm2 delete atproto-frontend 2>/dev/null || true
             pm2 start npm --name atproto-frontend -- start
