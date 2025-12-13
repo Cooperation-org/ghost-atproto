@@ -24,17 +24,21 @@ export async function runCommentSync(): Promise<{
   let totalErrors = 0;
 
   try {
-    // Get all users who have shim configured
+    // Get all users who have shim and Bluesky configured
     const users = await prisma.user.findMany({
       where: {
         shimUrl: { not: null },
         shimSecret: { not: null },
+        blueskyHandle: { not: null },
+        blueskyPassword: { not: null },
       },
       select: {
         id: true,
         email: true,
         shimUrl: true,
         shimSecret: true,
+        blueskyHandle: true,
+        blueskyPassword: true,
       },
     });
 
@@ -72,7 +76,12 @@ export async function runCommentSync(): Promise<{
 
         for (const post of posts) {
           try {
-            const result = await syncCommentsForPost(post.id, shimClient);
+            const result = await syncCommentsForPost(
+              post.id,
+              shimClient,
+              user.blueskyHandle!,
+              user.blueskyPassword!
+            );
             postsProcessed++;
             totalNewComments += result.newComments;
             totalErrors += result.errors.length;

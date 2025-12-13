@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { getPostThread, PostReply } from '../lib/atproto';
+import { getNotificationReplies, PostReply } from '../lib/atproto';
 import { ShimClient } from '../lib/shim-client';
 
 const prisma = new PrismaClient();
@@ -15,7 +15,9 @@ export interface CommentSyncResult {
  */
 export async function syncCommentsForPost(
   postId: string,
-  shimClient: ShimClient
+  shimClient: ShimClient,
+  blueskyHandle: string,
+  blueskyPassword: string
 ): Promise<CommentSyncResult> {
   const errors: string[] = [];
   let newComments = 0;
@@ -39,8 +41,11 @@ export async function syncCommentsForPost(
       throw new Error(`Post has no ghostId: ${postId}`);
     }
 
-    // Fetch the thread from Bluesky
-    const thread = await getPostThread(post.atprotoUri);
+    // Fetch replies from notifications API (much more efficient!)
+    const replies = await getNotificationReplies(
+      { handle: blueskyHandle, password: blueskyPassword },
+      [post.atprotoUri]
+    );
 
     // Create a map of existing synced comments
     const existingMappings = new Map(
@@ -49,7 +54,7 @@ export async function syncCommentsForPost(
 
     // Sort replies by createdAt to ensure parents are processed before children
     // This helps maintain proper parent-child relationships
-    const sortedReplies = [...thread.replies].sort((a, b) => {
+    const sortedReplies = [...replies].sort((a, b) => {
       return new Date(a.record.createdAt).getTime() - new Date(b.record.createdAt).getTime();
     });
 
@@ -126,7 +131,11 @@ export async function syncCommentsForPost(
 /**
  * Sync comments for all posts that have both ghostId and atprotoUri
  */
-export async function syncAllComments(shimClient: ShimClient): Promise<CommentSyncResult[]> {
+export async function syncAllComments(
+  shimClient: ShimClient,
+  blueskyHandle: string,
+  blueskyPassword: string
+): Promise<CommentSyncResult[]> {
   try {
     // Get all posts with both ghostId and atprotoUri
     const posts = await prisma.post.findMany({
@@ -140,7 +149,7 @@ export async function syncAllComments(shimClient: ShimClient): Promise<CommentSy
     const results: CommentSyncResult[] = [];
 
     for (const post of posts) {
-      const result = await syncCommentsForPost(post.id, shimClient);
+      const result = await syncCommentsForPost(post.id, shimClient, blueskyHandle, blueskyPassword);
       results.push(result);
     }
 

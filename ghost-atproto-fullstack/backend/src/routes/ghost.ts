@@ -178,15 +178,26 @@ router.post('/sync-comments/:postId', authenticateToken, async (req, res) => {
     const userId = (req as any).userId;
     const { postId } = req.params;
 
-    // Get user's shim config
+    // Get user's shim config and Bluesky credentials
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { shimUrl: true, shimSecret: true },
+      select: {
+        shimUrl: true,
+        shimSecret: true,
+        blueskyHandle: true,
+        blueskyPassword: true,
+      },
     });
 
     if (!user?.shimUrl || !user?.shimSecret) {
       return res.status(400).json({
         error: 'Shim not configured. Go to Settings to configure your comment sync.',
+      });
+    }
+
+    if (!user?.blueskyHandle || !user?.blueskyPassword) {
+      return res.status(400).json({
+        error: 'Bluesky credentials not configured. Go to Settings to add your Bluesky handle and app password.',
       });
     }
 
@@ -223,8 +234,13 @@ router.post('/sync-comments/:postId', authenticateToken, async (req, res) => {
       return res.status(503).json({ error: 'Comment shim is not available' });
     }
 
-    // Sync comments
-    const result = await syncCommentsForPost(postId, shimClient);
+    // Sync comments using notifications API
+    const result = await syncCommentsForPost(
+      postId,
+      shimClient,
+      user.blueskyHandle,
+      user.blueskyPassword
+    );
 
     return res.json({
       success: true,
