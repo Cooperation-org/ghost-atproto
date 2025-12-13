@@ -48,7 +48,7 @@ export function buildCommentHtml(params: {
   const safeText = escapeHtml(commentText);
 
   // Build HTML with inline styles (no custom classes for theme compatibility)
-  return `<p><a href="${safeProfileUrl}" style="color:inherit;text-decoration:none;"><strong>@${safeHandle}</strong></a></p>
+  return `<p><a href="${safeProfileUrl}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;"><strong>@${safeHandle}</strong></a></p>
 <p>${safeText}</p>
-<p style="font-size:0.85em;opacity:0.7;"><a href="${safePostUrl}">View on Bluesky ↗</a></p>`;
+<p style="font-size:0.85em;opacity:0.7;"><a href="${safePostUrl}" target="_blank" rel="noopener noreferrer">View on Bluesky ↗</a></p>`;
 }

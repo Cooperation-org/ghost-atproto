@@ -4,6 +4,7 @@ import { Config } from './config';
 
 export interface DbConnection {
   execute(query: string, params: any[]): Promise<void>;
+  query(query: string, params?: any[]): Promise<any[]>;
   close(): Promise<void>;
 }
 
@@ -16,6 +17,11 @@ class MySqlConnection implements DbConnection {
 
   async execute(query: string, params: any[]): Promise<void> {
     await this.pool.execute(query, params);
+  }
+
+  async query(query: string, params: any[] = []): Promise<any[]> {
+    const [rows] = await this.pool.execute(query, params);
+    return rows as any[];
   }
 
   async close(): Promise<void> {
@@ -33,6 +39,10 @@ class SqliteConnection implements DbConnection {
   async execute(query: string, params: any[]): Promise<void> {
     // SQLite uses ? for placeholders, which matches our usage
     this.db.prepare(query).run(params);
+  }
+
+  async query(query: string, params: any[] = []): Promise<any[]> {
+    return this.db.prepare(query).all(...params);
   }
 
   async close(): Promise<void> {

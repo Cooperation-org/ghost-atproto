@@ -3,6 +3,7 @@ import express from 'express';
 import { loadConfig } from './config';
 import { createDbConnection } from './db';
 import { createCommentsRouter } from './routes/comments';
+import { createTestRouter } from './routes/test';
 
 async function main() {
   console.log('Ghost Comments Shim v0.1.0');
@@ -35,12 +36,17 @@ async function main() {
     // Comments endpoint
     app.use('/comments', createCommentsRouter(config, db));
 
+    // Test endpoint
+    app.use('/test', createTestRouter(config, db));
+
     // Start server
     const server = app.listen(config.port, () => {
       console.log(`\n✓ Ghost Comments Shim listening on port ${config.port}`);
       console.log(`\nEndpoints:`);
-      console.log(`  GET  /health    - Health check`);
-      console.log(`  POST /comments  - Create comment from Bluesky\n`);
+      console.log(`  GET  /health      - Health check`);
+      console.log(`  POST /comments    - Create comment from Bluesky`);
+      console.log(`  GET  /test        - Test database connectivity`);
+      console.log(`  POST /test/write  - Test comment write (requires auth)\n`);
     });
 
     // Graceful shutdown
