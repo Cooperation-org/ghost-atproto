@@ -43,7 +43,8 @@ export default function ArticlesPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [syncingCommentsFor, setSyncingCommentsFor] = useState<string | null>(null);
-  const [commentSyncMessage, setCommentSyncMessage] = useState<{postId: string, message: string} | null>(null);
+  const [commentSyncMessage, setCommentSyncMessage] = useState<{postId: string, message: string, errors?: string[]} | null>(null);
+  const [showErrorDetails, setShowErrorDetails] = useState<string | null>(null);
 
   // Bluesky publish dialog state
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
@@ -113,7 +114,8 @@ export default function ArticlesPage() {
       if (result.errors.length > 0) {
         setCommentSyncMessage({
           postId,
-          message: `⚠ Synced with ${result.errors.length} error(s)`
+          message: `⚠ Synced with ${result.errors.length} error(s)`,
+          errors: result.errors
         });
       }
     } catch (err) {
@@ -495,9 +497,33 @@ export default function ArticlesPage() {
                               <Alert
                                 severity={commentSyncMessage.message.startsWith('✓') ? 'success' : 'error'}
                                 sx={{ mt: 1 }}
-                                onClose={() => setCommentSyncMessage(null)}
+                                onClose={() => {
+                                  setCommentSyncMessage(null);
+                                  setShowErrorDetails(null);
+                                }}
                               >
-                                {commentSyncMessage.message}
+                                <Box>
+                                  {commentSyncMessage.errors && commentSyncMessage.errors.length > 0 ? (
+                                    <>
+                                      <Box
+                                        component="span"
+                                        sx={{ cursor: 'pointer', textDecoration: 'underline' }}
+                                        onClick={() => setShowErrorDetails(showErrorDetails === post.id ? null : post.id)}
+                                      >
+                                        {commentSyncMessage.message}
+                                      </Box>
+                                      {showErrorDetails === post.id && (
+                                        <Box sx={{ mt: 1, fontSize: '0.875rem' }}>
+                                          {commentSyncMessage.errors.map((error, idx) => (
+                                            <Box key={idx} sx={{ mt: 0.5 }}>• {error}</Box>
+                                          ))}
+                                        </Box>
+                                      )}
+                                    </>
+                                  ) : (
+                                    commentSyncMessage.message
+                                  )}
+                                </Box>
                               </Alert>
                             )}
                           </>
