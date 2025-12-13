@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Grid,
-  Paper,
   Typography,
   Box,
   Card,
@@ -26,10 +25,8 @@ import ArticleIcon from '@mui/icons-material/Article';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloudIcon from '@mui/icons-material/Cloud';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import CommentIcon from '@mui/icons-material/Comment';
 import SyncIcon from '@mui/icons-material/Sync';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { PageState } from '@/components/PageState';
 import { api, ApiError } from '@/lib/api';
 import { Post } from '@/lib/types';
 
@@ -142,13 +139,16 @@ export default function ArticlesPage() {
     setPublishSuccess('');
 
     // Pre-fill with title and link
-    const textContent = post.content ? post.content.replace(/<[^>]*>/g, '').substring(0, 150) : '';
+    // Replace HTML tags with a space to preserve word boundaries
+    const textContent = post.content
+      ? post.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 150)
+      : '';
     let defaultContent = post.title;
     if (textContent) {
-      defaultContent += `\n\n${textContent}...`;
+      defaultContent += '\n\n' + textContent + '...';
     }
     if (post.ghostUrl) {
-      defaultContent += `\n\n${post.ghostUrl}`;
+      defaultContent += '\n\n' + post.ghostUrl;
     }
     // Trim to 300 chars if needed
     if (defaultContent.length > 300) {

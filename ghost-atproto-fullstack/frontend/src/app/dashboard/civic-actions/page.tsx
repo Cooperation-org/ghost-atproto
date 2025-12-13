@@ -1404,8 +1404,10 @@ export default function CivicActionsPage() {
               // Check if this is a user-submitted civic action
               const isUserSubmission = event.sponsor.name === 'Community Action';
               // Use actionId if available (database civic action), otherwise use the event ID
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
               const actionId = isUserSubmission ? (event.actionId || event.id.toString()) : null;
 
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
               const handleCardClick = () => {
                 // TODO: Define what should happen when clicking a card
                 // This is the civic actions DASHBOARD, not the Ghost editor card
