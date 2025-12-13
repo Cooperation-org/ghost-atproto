@@ -26,6 +26,8 @@ import ArticleIcon from '@mui/icons-material/Article';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloudIcon from '@mui/icons-material/Cloud';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import CommentIcon from '@mui/icons-material/Comment';
+import SyncIcon from '@mui/icons-material/Sync';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageState } from '@/components/PageState';
 import { api, ApiError } from '@/lib/api';
@@ -40,6 +42,8 @@ export default function ArticlesPage() {
   // Sync state
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
+  const [syncingCommentsFor, setSyncingCommentsFor] = useState<string | null>(null);
+  const [commentSyncMessage, setCommentSyncMessage] = useState<{postId: string, message: string} | null>(null);
 
   // Bluesky publish dialog state
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
@@ -87,6 +91,45 @@ export default function ArticlesPage() {
       }
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSyncComments = async (postId: string) => {
+    setSyncingCommentsFor(postId);
+    setCommentSyncMessage(null);
+    try {
+      const result = await api.syncCommentsForPost(postId);
+      if (result.newComments > 0) {
+        setCommentSyncMessage({
+          postId,
+          message: `✓ Synced ${result.newComments} new comment${result.newComments > 1 ? 's' : ''} from Bluesky`
+        });
+      } else {
+        setCommentSyncMessage({
+          postId,
+          message: `✓ No new comments to sync`
+        });
+      }
+      if (result.errors.length > 0) {
+        setCommentSyncMessage({
+          postId,
+          message: `⚠ Synced with ${result.errors.length} error(s)`
+        });
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setCommentSyncMessage({
+          postId,
+          message: `✗ ${err.message}`
+        });
+      } else {
+        setCommentSyncMessage({
+          postId,
+          message: `✗ Failed to sync comments`
+        });
+      }
+    } finally {
+      setSyncingCommentsFor(null);
     }
   };
 
@@ -420,6 +463,44 @@ export default function ArticlesPage() {
                           >
                             Post to Bluesky
                           </Button>
+                        )}
+
+                        {/* Sync Comments button - only show if published to Bluesky */}
+                        {post.atprotoUri && (
+                          <>
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSyncComments(post.id);
+                              }}
+                              fullWidth
+                              variant="outlined"
+                              disabled={syncingCommentsFor === post.id}
+                              startIcon={syncingCommentsFor === post.id ? <CircularProgress size={16} /> : <SyncIcon />}
+                              sx={{
+                                textTransform: 'none',
+                                borderRadius: 2,
+                                py: 1,
+                                fontWeight: 600,
+                                '&:hover': {
+                                  bgcolor: 'primary.main',
+                                  color: 'white',
+                                  borderColor: 'primary.main'
+                                }
+                              }}
+                            >
+                              {syncingCommentsFor === post.id ? 'Syncing...' : 'Sync Comments'}
+                            </Button>
+                            {commentSyncMessage && commentSyncMessage.postId === post.id && (
+                              <Alert
+                                severity={commentSyncMessage.message.startsWith('✓') ? 'success' : 'error'}
+                                sx={{ mt: 1 }}
+                                onClose={() => setCommentSyncMessage(null)}
+                              >
+                                {commentSyncMessage.message}
+                              </Alert>
+                            )}
+                          </>
                         )}
 
                         {post.ghostUrl && (

@@ -628,6 +628,18 @@ class ApiClient {
     });
   }
 
+  async syncCommentsForPost(postId: string): Promise<{
+    success: boolean;
+    postId: string;
+    postTitle: string;
+    newComments: number;
+    errors: string[];
+  }> {
+    return this.request(`/api/ghost/sync-comments/${postId}`, {
+      method: 'POST',
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Civic Events (Mobilize API)
   // ---------------------------------------------------------------------------

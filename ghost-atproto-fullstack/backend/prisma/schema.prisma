@@ -128,7 +128,7 @@ model CivicAction {
   title           String
   description     String            @db.Text
   eventType       String?           @map("event_type")
-  location        String?
+  location        String?           @db.Text
   eventDate       DateTime?         @map("event_date")
   status          String            @default("pending")
   isPinned        Boolean           @default(false) @map("is_pinned")
