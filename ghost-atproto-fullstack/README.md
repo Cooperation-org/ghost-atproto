@@ -283,8 +283,8 @@ The project uses GitHub Actions for continuous deployment:
    # Server Configuration
    PORT=5000
    NODE_ENV=production
-   APP_URL=https://bridge.linkedtrust.us
-   FRONTEND_URL=https://bridge.linkedtrust.us
+   APP_URL=https://civic.linkedtrust.us
+   FRONTEND_URL=https://civic.linkedtrust.us
 
    # Database
    DATABASE_URL="mysql://username:password@localhost:3306/ghost_atproto"
@@ -298,8 +298,8 @@ The project uses GitHub Actions for continuous deployment:
    GOOGLE_CLIENT_SECRET=your-google-client-secret
 
    # Bluesky OAuth (AT Protocol)
-   BLUESKY_CLIENT_ID=https://bridge.linkedtrust.us/client-metadata.json
-   BLUESKY_REDIRECT_URI=https://bridge.linkedtrust.us/api/auth/bluesky/callback
+   BLUESKY_CLIENT_ID=https://civic.linkedtrust.us/client-metadata.json
+   BLUESKY_REDIRECT_URI=https://civic.linkedtrust.us/api/auth/bluesky/callback
 
    # AT Protocol Service
    ATPROTO_SERVICE=https://bsky.social
@@ -312,7 +312,7 @@ The project uses GitHub Actions for continuous deployment:
    ```
 
    ```bash
-   NEXT_PUBLIC_API_URL=https://bridge.linkedtrust.us
+   NEXT_PUBLIC_API_URL=https://civic.linkedtrust.us
    ```
 
 6. **Secure the `.env` files:**

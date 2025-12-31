@@ -1,4 +1,10 @@
-# Ghost ATProto Bridge - System Overview
+# Ghost ATProto Civic - System Overview
+
+## IMPORTANT: Ask Before Making Decisions
+**ALWAYS ask the user before making decisions that could have wide-ranging impacts.** Don't assume the scope of changes - clarify first. For example:
+- Changing domain name does NOT mean changing all route paths
+- Prefer the shortest, simplest solution
+- When in doubt, ASK
 
 ## Purpose
 Multi-audience platform bridging Ghost blogs, Bluesky, and civic engagement.
@@ -109,7 +115,7 @@ Browsing without login:
 ### 4. Comments Back to Ghost
 - Bluesky comments/replies monitored via ATProto
 - Comments sent to Ghost via shim webhook
-- Creates Ghost member `comments@bsky.atproto.invalid` with label `bluesky-bridge`
+- Creates Ghost member `comments@bsky.atproto.invalid` with label `bluesky-civic`
 - Comments associated with bridged member
 
 ## User Configuration (Per-User)
