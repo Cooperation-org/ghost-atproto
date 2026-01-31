@@ -1,8 +1,15 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { AtpAgent } from '@atproto/api';
 import { publishToBluesky } from '../lib/atproto';
 import bcrypt from 'bcryptjs';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
+import {
+  getOrCreatePublication,
+  createDocument,
+  PublicationMetadata,
+} from '../lib/standard-site';
+import { fetchGhostSiteMetadata } from '../lib/ghost-admin';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -67,60 +74,189 @@ router.post('/publish', authenticateToken, async (req: any, res) => {
       });
     }
 
-    // Use the customText directly - user has full control
-    const blueskyContent = customText;
+    // Check if user has standard.site enabled
+    if (user.useStandardSite) {
+      // ===== STANDARD.SITE PUBLISHING =====
+      console.log('Publishing using standard.site format...');
 
-    if (!blueskyContent || blueskyContent.trim().length === 0) {
-      return res.status(400).json({
-        error: 'Post content is required'
+      // Create authenticated agent
+      const agent = new AtpAgent({
+        service: process.env.BLUESKY_SERVICE_URL || 'https://bsky.social'
       });
-    }
 
-    // Bluesky character limit is 300
-    if (blueskyContent.length > 300) {
-      return res.status(400).json({
-        error: `Content exceeds Bluesky's 300 character limit (currently ${blueskyContent.length} characters)`
+      await agent.login({
+        identifier: user.blueskyHandle,
+        password: user.blueskyPassword
       });
-    }
 
-    // Publish using ATProto with user's credentials
-    const atprotoResult = await publishToBluesky(blueskyContent, {
-      handle: user.blueskyHandle,
-      password: user.blueskyPassword
-    });
+      // Get or create publication
+      let publicationMetadata: PublicationMetadata;
 
-    // Update sync_logs
-    await prisma.syncLog.create({
-      data: {
-        action: 'publish_to_atproto',
-        status: 'success',
-        source: 'ghost',
-        target: 'atproto',
+      if (user.publicationName && user.ghostUrl) {
+        // Use stored publication metadata
+        publicationMetadata = {
+          url: user.ghostUrl,
+          name: user.publicationName,
+          description: user.publicationDescription || undefined,
+        };
+      } else if (user.ghostUrl && user.ghostApiKey) {
+        // Fetch metadata from Ghost API
+        console.log('Fetching publication metadata from Ghost...');
+        const ghostMetadata = await fetchGhostSiteMetadata(user.ghostUrl, user.ghostApiKey);
+        publicationMetadata = {
+          url: ghostMetadata.url,
+          name: ghostMetadata.title,
+          description: ghostMetadata.description,
+          icon: ghostMetadata.icon,
+        };
+
+        // Store metadata for future use
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            publicationName: ghostMetadata.title,
+            publicationDescription: ghostMetadata.description,
+          },
+        });
+      } else {
+        return res.status(400).json({
+          error: 'Ghost URL and API key are required for standard.site publishing'
+        });
+      }
+
+      // Get or create publication record
+      const publication = await getOrCreatePublication(agent, userId, publicationMetadata);
+      console.log('Publication ready:', publication.uri);
+
+      // Create document record for this post
+      const documentResult = await createDocument(agent, publication.uri, {
+        title: post.title,
+        content: post.content,
+        slug: post.slug,
+        publishedAt: post.publishedAt || new Date(),
+        excerpt: post.excerpt || undefined,
+      });
+
+      console.log('Document created:', documentResult.uri);
+
+      // If dual post is enabled, also create social post
+      let socialPostUri = null;
+      let socialPostCid = null;
+
+      if (user.standardSiteDualPost && customText) {
+        console.log('Dual posting: creating social post...');
+        try {
+          if (customText.trim().length > 0 && customText.length <= 300) {
+            const socialResult = await publishToBluesky(customText, {
+              handle: user.blueskyHandle,
+              password: user.blueskyPassword
+            });
+            socialPostUri = socialResult.uri;
+            socialPostCid = socialResult.cid;
+            console.log('Social post created:', socialPostUri);
+          }
+        } catch (socialError) {
+          console.error('Social post failed, continuing with document:', socialError);
+          // Don't fail the whole operation if social post fails
+        }
+      }
+
+      // Update sync logs
+      await prisma.syncLog.create({
+        data: {
+          action: 'publish_to_standard_site',
+          status: 'success',
+          source: 'ghost',
+          target: 'atproto',
+          postId: post.id,
+          ghostId: post.ghostId,
+          atprotoUri: documentResult.uri,
+          userId: post.userId
+        }
+      });
+
+      // Update the post with standard.site document URI
+      await prisma.post.update({
+        where: { id: postId },
+        data: {
+          standardSiteDocumentUri: documentResult.uri,
+          atprotoUri: socialPostUri, // Legacy field, stores social post if dual post
+          atprotoCid: socialPostCid,
+          updatedAt: new Date()
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'Post published to standard.site successfully',
         postId: post.id,
-        ghostId: post.ghostId,
-        atprotoUri: atprotoResult.uri,
-        userId: post.userId
-      }
-    });
+        title: post.title,
+        format: 'standard.site',
+        standardSiteDocumentUri: documentResult.uri,
+        standardSitePublicationUri: publication.uri,
+        socialPostUri: socialPostUri || undefined,
+        dualPost: user.standardSiteDualPost,
+      });
+    } else {
+      // ===== LEGACY PUBLISHING (social post) =====
+      console.log('Publishing using legacy format (social post)...');
 
-    // Update the post to track ATProto URI and CID
-    await prisma.post.update({
-      where: { id: postId },
-      data: {
-        atprotoUri: atprotoResult.uri,
-        atprotoCid: atprotoResult.cid,
-        updatedAt: new Date()
-      }
-    });
+      // Use the customText directly - user has full control
+      const blueskyContent = customText;
 
-    res.json({ 
-      success: true, 
-      message: 'Post published to ATProto successfully',
-      postId: post.id,
-      title: post.title,
-      atprotoUri: atprotoResult.uri,
-      atprotoCid: atprotoResult.cid
-    });
+      if (!blueskyContent || blueskyContent.trim().length === 0) {
+        return res.status(400).json({
+          error: 'Post content is required'
+        });
+      }
+
+      // Bluesky character limit is 300
+      if (blueskyContent.length > 300) {
+        return res.status(400).json({
+          error: `Content exceeds Bluesky's 300 character limit (currently ${blueskyContent.length} characters)`
+        });
+      }
+
+      // Publish using ATProto with user's credentials
+      const atprotoResult = await publishToBluesky(blueskyContent, {
+        handle: user.blueskyHandle,
+        password: user.blueskyPassword
+      });
+
+      // Update sync_logs
+      await prisma.syncLog.create({
+        data: {
+          action: 'publish_to_atproto',
+          status: 'success',
+          source: 'ghost',
+          target: 'atproto',
+          postId: post.id,
+          ghostId: post.ghostId,
+          atprotoUri: atprotoResult.uri,
+          userId: post.userId
+        }
+      });
+
+      // Update the post to track ATProto URI and CID
+      await prisma.post.update({
+        where: { id: postId },
+        data: {
+          atprotoUri: atprotoResult.uri,
+          atprotoCid: atprotoResult.cid,
+          updatedAt: new Date()
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'Post published to ATProto successfully',
+        postId: post.id,
+        title: post.title,
+        format: 'legacy',
+        atprotoUri: atprotoResult.uri,
+        atprotoCid: atprotoResult.cid
+      });
+    }
 
   } catch (error) {
     console.error('ATProto publish error:', error);
