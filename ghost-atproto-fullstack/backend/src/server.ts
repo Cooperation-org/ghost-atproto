@@ -19,6 +19,8 @@ import ghostRoutes from './routes/ghost';
 import authRoutes from './routes/auth';
 import usersRoutes from './routes/users';
 import civicActionsRoutes from './routes/civic-actions';
+import wellKnownRoutes from './routes/well-known';
+import standardSiteRoutes from './routes/standard-site';
 import axios from 'axios';
 import { setupGoogleOAuth } from './lib/google-oauth';
 import { setupBlueskyOAuth } from './lib/bluesky-oauth';
@@ -836,6 +838,8 @@ app.use('/api/auth', authRoutes);   // Auth routes (login, signup, me) - overrid
 app.use('/api/users', usersRoutes); // User admin routes
 app.use('/api', civicActionsRoutes); // Civic actions (/public/civic-actions, /civic-actions)
 app.use('/api/ghost', ghostRoutes);
+app.use('/api/standard-site', standardSiteRoutes); // Standard.site routes
+app.use('/.well-known', wellKnownRoutes); // standard.site verification endpoint
 
 
 app.get('/api/health', (req, res) => {

@@ -8,31 +8,37 @@ datasource db {
 }
 
 model User {
-  id                      String           @id @default(cuid())
-  email                   String           @unique
-  name                    String?
-  createdAt               DateTime         @default(now())
-  updatedAt               DateTime         @updatedAt
-  blueskyHandle           String?          @map("bluesky_handle")
-  blueskyPassword         String?          @map("bluesky_password")
-  blueskyDid              String?
-  ghostApiKey             String?          @map("ghost_api_key")
-  ghostUrl                String?          @map("ghost_url")
-  ghostWebhookId          String?          @map("ghost_webhook_id")
-  ghostContentApiKey      String?          @map("ghost_content_api_key")
-  blueskyMemberId         String?          @map("bluesky_member_id")
-  shimUrl                 String?          @map("shim_url")
-  shimSecret              String?          @map("shim_secret")
-  password                String
-  role                    Role             @default(USER)
-  autoSync                Boolean          @default(true) @map("auto_sync")
-  reviewedCivicActions    CivicAction[]    @relation("ReviewedActions")
-  recommendedCivicActions CivicAction[]    @relation("RecommendedActions")
-  submittedCivicActions   CivicAction[]    @relation("SubmittedActions")
-  engagements             UserEngagement[]
-  oauthSessions           OAuthSession[]
-  posts                   Post[]
-  syncLogs                SyncLog[]
+  id                          String           @id @default(cuid())
+  email                       String           @unique
+  name                        String?
+  createdAt                   DateTime         @default(now())
+  updatedAt                   DateTime         @updatedAt
+  blueskyHandle               String?          @map("bluesky_handle")
+  blueskyPassword             String?          @map("bluesky_password")
+  blueskyDid                  String?
+  ghostApiKey                 String?          @map("ghost_api_key")
+  ghostUrl                    String?          @map("ghost_url")
+  ghostWebhookId              String?          @map("ghost_webhook_id")
+  ghostContentApiKey          String?          @map("ghost_content_api_key")
+  blueskyMemberId             String?          @map("bluesky_member_id")
+  shimUrl                     String?          @map("shim_url")
+  shimSecret                  String?          @map("shim_secret")
+  password                    String
+  role                        Role             @default(USER)
+  autoSync                    Boolean          @default(true) @map("auto_sync")
+  standardSitePublicationUri  String?          @map("standard_site_publication_uri")
+  standardSitePublicationRkey String?          @map("standard_site_publication_rkey")
+  useStandardSite             Boolean          @default(false) @map("use_standard_site")
+  standardSiteDualPost        Boolean          @default(false) @map("standard_site_dual_post")
+  publicationName             String?          @map("publication_name")
+  publicationDescription      String?          @db.Text @map("publication_description")
+  reviewedCivicActions        CivicAction[]    @relation("ReviewedActions")
+  recommendedCivicActions     CivicAction[]    @relation("RecommendedActions")
+  submittedCivicActions       CivicAction[]    @relation("SubmittedActions")
+  engagements                 UserEngagement[]
+  oauthSessions               OAuthSession[]
+  posts                       Post[]
+  syncLogs                    SyncLog[]
 
   @@map("users")
 }
@@ -56,24 +62,25 @@ model OAuthSession {
 }
 
 model Post {
-  id              String           @id @default(cuid())
-  title           String
-  content         String           @db.Text
-  excerpt         String?          @db.Text
-  slug            String
-  status          String           @default("draft")
-  featureImage    String?
-  ghostId         String?          @unique
-  ghostSlug       String?
-  ghostUrl        String?
-  atprotoUri      String?
-  atprotoCid      String?
-  publishedAt     DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  userId          String
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  commentMappings CommentMapping[]
+  id                      String           @id @default(cuid())
+  title                   String
+  content                 String           @db.Text
+  excerpt                 String?          @db.Text
+  slug                    String
+  status                  String           @default("draft")
+  featureImage            String?
+  ghostId                 String?          @unique
+  ghostSlug               String?
+  ghostUrl                String?
+  atprotoUri              String?
+  atprotoCid              String?
+  standardSiteDocumentUri String?          @map("standard_site_document_uri")
+  publishedAt             DateTime?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  userId                  String
+  user                    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commentMappings         CommentMapping[]
 
   @@index([userId], map: "posts_userId_fkey")
   @@map("posts")
