@@ -47,7 +47,8 @@ jobs:
             npm rebuild --ignore-scripts
             npx prisma migrate deploy --skip-generate
             npx prisma generate
-            npm run build
+            log "Building backend (tsc)..."
+            npm run build || { log "❌ Backend build failed"; exit 1; }
             pm2 ping >/dev/null 2>&1 || pm2 resurrect 2>/dev/null || true
             pm2 delete atproto-backend 2>/dev/null || true
             pm2 start dist/server.js --name atproto-backend
