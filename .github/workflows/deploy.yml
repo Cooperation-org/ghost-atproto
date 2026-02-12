@@ -45,7 +45,7 @@ jobs:
             cd backend
             npm ci --ignore-scripts
             npm rebuild --ignore-scripts
-            npx prisma migrate deploy --skip-generate
+            npx prisma migrate deploy
             npx prisma generate
             log "Building backend (tsc)..."
             npm run build || { log "❌ Backend build failed"; exit 1; }
