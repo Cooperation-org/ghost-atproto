@@ -35,8 +35,9 @@ jobs:
             # Save for rollback
             PREV=$(git rev-parse HEAD)
             
-            # Deploy
-            git pull origin main
+            # Deploy: fetch and reset so unstaged changes (e.g. build artifacts) don't block
+            git fetch origin
+            git reset --hard origin/main
             rm -rf frontend/.next backend/dist
             
             # Backend
